@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.local
+.env.*.local
+dist/
+.next/
+.vercel/
+*.log
+.DS_Store
+Thumbs.db
+coverage/
+
+# Supporting docs — raw data files contain real employee PII, never commit
+supporting docs/docs/*.csv
+supporting docs/docs/*.xlsm
+supporting docs/docs/*.xlsx
+supporting docs/docs/*.docx
