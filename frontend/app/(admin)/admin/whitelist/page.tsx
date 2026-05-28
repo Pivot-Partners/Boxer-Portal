@@ -40,23 +40,26 @@ export default function WhitelistPage() {
 	}, []);
 
 	async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-		const file = e.target.files?.[0];
-		if (!file) return;
+		const files = Array.from(e.target.files ?? []);
+		if (files.length === 0) return;
 
 		setUploadError('');
 		setUploadSuccess('');
 		setUploading(true);
 
 		const formData = new FormData();
-		formData.append('file', file);
+		for (const file of files) {
+			formData.append('file', file);
+		}
 
 		try {
-			const res = await apiUpload<{ data: { valid_count: number; error_count: number; record_count: number } }>(
+			const res = await apiUpload<{ data: { valid_count: number; error_count: number; record_count: number; files: number } }>(
 				'/m1/whitelist/upload',
 				formData
 			);
+			const fileLabel = (res.data?.files ?? 1) > 1 ? `${res.data?.files} files` : '1 file';
 			setUploadSuccess(
-				`Upload complete — ${res.data?.valid_count?.toLocaleString()} valid records (${res.data?.error_count ?? 0} errors).`
+				`Upload complete (${fileLabel}) — ${res.data?.valid_count?.toLocaleString()} valid records (${res.data?.error_count ?? 0} errors).`
 			);
 			await fetchUploads();
 		} catch (err) {
@@ -71,7 +74,7 @@ export default function WhitelistPage() {
 		<div className="space-y-8">
 			<div>
 				<h1 className="text-2xl font-bold">HR Whitelist</h1>
-				<p className="text-gray-500 text-sm mt-1">Upload the HR CSV to update the eligible employee list</p>
+				<p className="text-gray-500 text-sm mt-1">Upload both HR CSV files together to update the eligible employee list</p>
 			</div>
 
 			{/* Upload area */}
@@ -87,16 +90,17 @@ export default function WhitelistPage() {
 						ref={fileRef}
 						type="file"
 						accept=".csv"
+						multiple
 						className="hidden"
 						onChange={handleFileUpload}
 						disabled={uploading}
 					/>
 					<div className="text-3xl mb-3">{uploading ? '⏳' : '📄'}</div>
 					<p className="text-sm font-medium text-gray-700">
-						{uploading ? 'Uploading and processing…' : 'Click to select HR CSV file'}
+						{uploading ? 'Uploading and processing…' : 'Click to select HR CSV files'}
 					</p>
 					<p className="text-xs text-gray-500 mt-1">
-						{uploading ? 'This may take a moment' : 'CSV with employee whitelist data'}
+						{uploading ? 'This may take a moment for large files' : 'Select both files at once (flexi + permanent)'}
 					</p>
 				</label>
 
@@ -112,7 +116,8 @@ export default function WhitelistPage() {
 				)}
 
 				<div className="mt-4 text-xs text-gray-500 space-y-0.5">
-					<p>Expected columns: EmployeeNo, Identity Number, First names, Last name, Store Number, Category, salary band flags (&gt;3600, &gt;4400, &gt;6596, &gt;8796, &gt;13595, &gt;17196)</p>
+					<p>Upload both files together: flexi workers (~4,000 records) and permanent workers (~14,400 records).</p>
+					<p className="mt-1">Expected columns: EmployeeNo, Identity Number, First names, Last name, Store Number (or Store Num), Category, Pers. subarea text, salary band flags (&gt;3600 … &gt;17196)</p>
 				</div>
 			</div>
 

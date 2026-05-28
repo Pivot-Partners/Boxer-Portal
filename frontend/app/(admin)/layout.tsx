@@ -7,9 +7,11 @@ import { api } from '@/lib/api';
 
 const NAV = [
 	{ label: 'Dashboard', href: '/admin' },
+	{ label: 'Applications', href: '/admin/applications' },
 	{ label: 'Whitelist', href: '/admin/whitelist' },
 	{ label: 'Batches', href: '/admin/batches' },
 	{ label: 'Phone Models', href: '/admin/phones' },
+	{ label: 'Stores', href: '/admin/stores' },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

@@ -29,12 +29,21 @@ interface Store { id: string; name: string; category: StoreCategory; }
 interface PhoneModel {
 	id: string;
 	model_name: string;
-	retail_price: number;
+	cash_price: number;
 	upfront_amount: number;
 	rental_amount_7m: number;
 	rental_amount_13m: number;
 	display_order: number;
 }
+
+const BAND_FLOOR: Record<string, number> = {
+	'>3600': 3600,
+	'>4400': 4400,
+	'>6596': 6596,
+	'>8796': 8796,
+	'>13595': 13595,
+	'>17196': 17196,
+};
 interface Me {
 	display_name?: string;
 	eligible_model_ids: string[];
@@ -43,6 +52,9 @@ interface Me {
 
 interface FormState {
 	contactNumber: string;
+	email: string;
+	employeeNumber: string;
+	idNumber: string;
 	storeCategory: StoreCategory | '';
 	storeId: string;
 	phoneModelId: string;
@@ -94,6 +106,9 @@ export default function ApplyPage() {
 
 	const [form, setForm] = useState<FormState>({
 		contactNumber: '',
+		email: '',
+		employeeNumber: '',
+		idNumber: '',
 		storeCategory: '',
 		storeId: '',
 		phoneModelId: '',
@@ -102,6 +117,13 @@ export default function ApplyPage() {
 	});
 
 	useEffect(() => {
+		// Restore credentials from sessionStorage (set at login, cleared when tab closes)
+		const storedEmpNo = sessionStorage.getItem('boxer_emp_no') ?? '';
+		const storedIdNo = sessionStorage.getItem('boxer_id_no') ?? '';
+		if (storedEmpNo || storedIdNo) {
+			setForm((f) => ({ ...f, employeeNumber: storedEmpNo, idNumber: storedIdNo }));
+		}
+
 		Promise.all([
 			api<{ data: Me }>('/auth/me').then((r) => setMe(r.data)),
 			api<{ data: Record<string, Store[]> }>('/m1/stores').then((r) => setStores(r.data ?? {})),
@@ -135,16 +157,23 @@ export default function ApplyPage() {
 
 	async function handleSubmit() {
 		if (!form.storeId || !form.phoneModelId || form.rentalTerm === null || !form.termsAccepted) return;
+		if (!form.employeeNumber || !form.idNumber) {
+			setSubmitError('Please enter your employee number and ID number in Step 1.');
+			return;
+		}
 		setSubmitting(true);
 		setSubmitError('');
 		try {
 			const res = await api<{ data: { reference_number: string } }>('/m1/applications', {
 				method: 'POST',
 				body: {
+					employee_number: form.employeeNumber,
+					id_number: form.idNumber,
 					place_of_work_category: form.storeCategory,
 					place_of_work: selectedStore?.name ?? '',
 					store_id: form.storeId,
 					contact_number: form.contactNumber,
+					email: form.email || undefined,
 					phone_model_id: form.phoneModelId,
 					rental_term: form.rentalTerm,
 					terms_accepted: true,
@@ -206,6 +235,7 @@ export default function ApplyPage() {
 					form={form}
 					onChange={patch}
 					onNext={() => setStep(1)}
+					credentialsMissing={!form.employeeNumber || !form.idNumber}
 				/>
 			)}
 			{step === 1 && (
@@ -224,6 +254,7 @@ export default function ApplyPage() {
 					form={form}
 					onChange={patch}
 					onNext={() => setStep(3)}
+					salaryBand={me?.salary_band}
 				/>
 			)}
 			{step === 3 && (
@@ -249,15 +280,21 @@ function Step1({
 	form,
 	onChange,
 	onNext,
+	credentialsMissing,
 }: {
 	me: Me | null;
 	form: FormState;
 	onChange: (u: Partial<FormState>) => void;
 	onNext: () => void;
+	credentialsMissing: boolean;
 }) {
+	const canContinue =
+		form.contactNumber.replace(/\D/g, '').length >= 10 &&
+		(!credentialsMissing || (form.employeeNumber.trim().length > 0 && form.idNumber.trim().length > 0));
+
 	function handleNext(e: React.FormEvent) {
 		e.preventDefault();
-		if (form.contactNumber.replace(/\D/g, '').length >= 10) onNext();
+		if (canContinue) onNext();
 	}
 
 	return (
@@ -293,9 +330,56 @@ function Step1({
 				</p>
 			</div>
 
+			<div>
+				<label className="block text-sm font-medium text-gray-700 mb-1">
+					Email address <span className="text-gray-400 font-normal text-xs">(optional)</span>
+				</label>
+				<input
+					type="email"
+					value={form.email}
+					onChange={(e) => onChange({ email: e.target.value })}
+					placeholder="e.g. name@email.com"
+					className={inputCls()}
+				/>
+			</div>
+
+			{credentialsMissing && (
+				<div className="space-y-4">
+					<div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm">
+						Your session has expired. Please re-enter your employee and ID numbers to continue.
+					</div>
+					<div>
+						<label className="block text-sm font-medium text-gray-700 mb-1">
+							Employee Number <span className="text-red-500">*</span>
+						</label>
+						<input
+							type="text"
+							value={form.employeeNumber}
+							onChange={(e) => onChange({ employeeNumber: e.target.value })}
+							autoComplete="off"
+							placeholder="e.g. 12345678"
+							className={inputCls()}
+						/>
+					</div>
+					<div>
+						<label className="block text-sm font-medium text-gray-700 mb-1">
+							ID Number <span className="text-red-500">*</span>
+						</label>
+						<input
+							type="text"
+							value={form.idNumber}
+							onChange={(e) => onChange({ idNumber: e.target.value })}
+							autoComplete="off"
+							placeholder="13-digit SA ID number"
+							className={inputCls()}
+						/>
+					</div>
+				</div>
+			)}
+
 			<button
 				type="submit"
-				disabled={form.contactNumber.replace(/\D/g, '').length < 10}
+				disabled={!canContinue}
 				className="w-full py-3 bg-primary-700 hover:bg-primary-800 text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
 			>
 				Continue →
@@ -400,12 +484,16 @@ function Step3({
 	form,
 	onChange,
 	onNext,
+	salaryBand,
 }: {
 	phones: PhoneModel[];
 	form: FormState;
 	onChange: (u: Partial<FormState>) => void;
 	onNext: () => void;
+	salaryBand?: string;
 }) {
+	const bandFloor = salaryBand ? (BAND_FLOOR[salaryBand] ?? 0) : 0;
+
 	function selectOption(phoneModelId: string, rentalTerm: 0 | 7 | 13) {
 		onChange({ phoneModelId, rentalTerm });
 	}
@@ -432,52 +520,69 @@ function Step3({
 			</div>
 
 			<div className="space-y-4">
-				{phones.map((phone) => (
-					<div
-						key={phone.id}
-						className={`bg-white border rounded-xl overflow-hidden transition-all ${
-							form.phoneModelId === phone.id ? 'border-primary-500 shadow-sm' : 'border-gray-200'
-						}`}
-					>
-						<div className="px-4 py-3 border-b border-gray-100">
-							<p className="font-semibold">{phone.model_name}</p>
-							<p className="text-xs text-gray-500">Retail value: {zar(phone.retail_price)}</p>
-						</div>
-						<div className="divide-y divide-gray-100">
-							{([
-								{ label: 'Cash purchase', sublabel: `${zar(phone.upfront_amount)} upfront`, term: 0 as const },
-								{ label: '7-month rental', sublabel: `${zar(phone.rental_amount_7m)} / month`, term: 7 as const },
-								{ label: '13-month rental', sublabel: `${zar(phone.rental_amount_13m)} / month`, term: 13 as const },
-							] as const).map(({ label, sublabel, term }) => {
-								const selected = form.phoneModelId === phone.id && form.rentalTerm === term;
-								return (
-									<button
-										key={term}
-										type="button"
-										onClick={() => selectOption(phone.id, term)}
-										className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
-											selected ? 'bg-primary-50' : 'hover:bg-gray-50'
-										}`}
-									>
-										<div>
-											<p className={`text-sm font-medium ${selected ? 'text-primary-800' : 'text-gray-700'}`}>
-												{label}
-											</p>
-											<p className="text-xs text-gray-500">{sublabel}</p>
-										</div>
-										<div
-											className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-												selected ? 'border-primary-700 bg-primary-700' : 'border-gray-300'
+				{phones.map((phone) => {
+					const canCash = bandFloor >= phone.cash_price * 4;
+
+					const options: { label: string; sublabel: string; term: 0 | 7 | 13 }[] = [
+						...(canCash ? [{
+							label: 'Buy for cash',
+							sublabel: `${zar(phone.cash_price)} deducted once from salary`,
+							term: 0 as const,
+						}] : []),
+						{
+							label: '7-month rental',
+							sublabel: `First deduction ${zar(phone.upfront_amount)}, then ${zar(phone.rental_amount_7m)}/month × 6`,
+							term: 7 as const,
+						},
+						{
+							label: '13-month rental',
+							sublabel: `First deduction ${zar(phone.upfront_amount)}, then ${zar(phone.rental_amount_13m)}/month × 12`,
+							term: 13 as const,
+						},
+					];
+
+					return (
+						<div
+							key={phone.id}
+							className={`bg-white border rounded-xl overflow-hidden transition-all ${
+								form.phoneModelId === phone.id ? 'border-primary-500 shadow-sm' : 'border-gray-200'
+							}`}
+						>
+							<div className="px-4 py-3 border-b border-gray-100">
+								<p className="font-semibold">{phone.model_name}</p>
+							</div>
+							<div className="divide-y divide-gray-100">
+								{options.map(({ label, sublabel, term }) => {
+									const selected = form.phoneModelId === phone.id && form.rentalTerm === term;
+									return (
+										<button
+											key={term}
+											type="button"
+											onClick={() => selectOption(phone.id, term)}
+											className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
+												selected ? 'bg-primary-50' : 'hover:bg-gray-50'
 											}`}
 										>
-											{selected && <div className="w-2 h-2 rounded-full bg-white" />}
-										</div>
-									</button>
-								);
-							})}
+											<div>
+												<p className={`text-sm font-medium ${selected ? 'text-primary-800' : 'text-gray-700'}`}>
+													{label}
+												</p>
+												<p className="text-xs text-gray-500">{sublabel}</p>
+											</div>
+											<div
+												className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+													selected ? 'border-primary-700 bg-primary-700' : 'border-gray-300'
+												}`}
+											>
+												{selected && <div className="w-2 h-2 rounded-full bg-white" />}
+											</div>
+										</button>
+									);
+								})}
+							</div>
 						</div>
-					</div>
-				))}
+					);
+				})}
 			</div>
 
 			<button
@@ -515,10 +620,10 @@ function Step4({
 }) {
 	const termLabel =
 		form.rentalTerm === 0
-			? `Cash — ${selectedPhone ? zar(selectedPhone.upfront_amount) : ''} upfront`
+			? `Cash — ${selectedPhone ? zar(selectedPhone.cash_price) : ''} deducted once`
 			: form.rentalTerm === 7
-			? `7-month rental — ${selectedPhone ? zar(selectedPhone.rental_amount_7m) : ''}/month`
-			: `13-month rental — ${selectedPhone ? zar(selectedPhone.rental_amount_13m) : ''}/month`;
+			? `7-month rental — First deduction ${selectedPhone ? zar(selectedPhone.upfront_amount) : ''}, then ${selectedPhone ? zar(selectedPhone.rental_amount_7m) : ''}/month × 6`
+			: `13-month rental — First deduction ${selectedPhone ? zar(selectedPhone.upfront_amount) : ''}, then ${selectedPhone ? zar(selectedPhone.rental_amount_13m) : ''}/month × 12`;
 
 	return (
 		<div className="space-y-6">
@@ -529,6 +634,7 @@ function Step4({
 
 			<div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
 				<Row label="Name" value={me?.display_name ?? '—'} />
+				<Row label="Employee number" value={form.employeeNumber || '—'} />
 				<Row label="Contact number" value={form.contactNumber} />
 				<Row label="Place of work" value={selectedStore?.name ?? '—'} />
 				<Row label="Phone" value={selectedPhone?.model_name ?? '—'} />

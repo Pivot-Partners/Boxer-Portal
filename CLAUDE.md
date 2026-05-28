@@ -56,18 +56,18 @@ boxer-portal/
 
 ## POPIA Compliance — Non-Negotiable
 
-- **No raw PII in the database.** Employee numbers and ID numbers are bcrypt-hashed (cost 12) before any DB write or comparison.
+- **No raw PII in the database.** Whitelist lookups use HMAC-SHA256 (deterministic, indexed). Applications store employee number and ID number as AES-256-GCM ciphertext (reversible for HR export only).
 - **No raw PII in JWTs.** Tokens carry `employee_number_hash`, never the actual number.
 - **No raw PII in logs.** Audit entries use hashes only.
 - `display_name` (first + last name) is the ONLY plaintext personal field stored.
-- Data residency: South Africa only — Supabase `af-south-1`, Railway Johannesburg.
+- Data residency: Supabase Frankfurt (`eu-central-1`) for staging. POPIA sign-off required before production go-live (see DEPLOYMENT.md).
 
 ---
 
 ## Auth — Two Models
 
-**Employees & Store Managers:** Employee number + ID number → bcrypt compare against hashed whitelist/store_managers table
-**Admins:** Email + password → bcrypt compare against users table
+**Employees & Store Managers:** Employee number → HMAC-SHA256 → indexed lookup in whitelist_records; ID number → HMAC compare against stored hash
+**Admins:** Email + password → bcrypt compare (cost 12) against users table; 15-minute JWT + 7-day httpOnly refresh token
 
 JWTs stored in **httpOnly, SameSite=Strict cookies** — never localStorage.
 
@@ -106,6 +106,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 JWT_SECRET=
 JWT_REFRESH_SECRET=
 BCRYPT_ROUNDS=12
+ENCRYPTION_KEY=
 RESEND_API_KEY=
 SMS_PROVIDER=panacea
 PANACEA_API_KEY=
@@ -142,10 +143,15 @@ SMS and email calls fail gracefully in dev (logged, not thrown). AI calls requir
 
 ## Database
 
-Schema lives in `scripts/migrations/001_initial_schema.sql`. Apply via Supabase SQL editor or:
-```bash
-cd scripts && npm run migrate
-```
+Apply all migrations in order via the Supabase SQL editor:
+
+| File | What it does |
+|------|-------------|
+| `001_initial_schema.sql` | All tables, indexes, RLS on 5 core tables, grants, seed data |
+| `002_batch_catalogue_and_pii.sql` | `batch_phone_catalogue` table, encrypted PII columns on applications |
+| `003_application_admin_edit.sql` | Admin edit tracking columns on applications |
+| `004_whitelist_salary_band_nullable.sql` | Allow null salary_band on whitelist_records |
+| `005_enable_rls_all_tables.sql` | RLS on the 11 tables migration 001 missed — required before go-live |
 
 Seed super admin after schema is applied:
 ```bash

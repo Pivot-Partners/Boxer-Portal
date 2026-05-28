@@ -44,16 +44,35 @@ If the POPIA assessment requires in-country hosting, the alternative is a self-h
 
 ### 1.4 Apply the database schema
 
-1. In the left sidebar, click **SQL Editor**
-2. Click **New query** (top left of the SQL editor pane)
-3. Open the file `scripts/migrations/001_initial_schema.sql` in your code editor — copy the entire contents
-4. Paste into the Supabase SQL editor
-5. Click **Run** (or press Ctrl+Enter / Cmd+Enter)
-6. You should see: `Success. No rows returned`
-7. Verify it worked: click **Table Editor** in the left sidebar — you should see these tables listed:
-   - applications, audit_logs, batches, otp_events, orders, phone_models, rentals, roles, sessions, store_managers, stores, system_config, users, whitelist_records, whitelist_uploads
+Apply all migrations **in order**, one at a time. Each migration must succeed before running the next.
 
-If you see an error instead, copy the error message and check that you pasted the full file contents (it should be approximately 300 lines).
+**Migration 001 — Initial schema**
+1. In the left sidebar, click **SQL Editor** → **New query**
+2. Open `scripts/migrations/001_initial_schema.sql`, copy the entire contents, paste into the editor
+3. Click **Run** — you should see `Success. No rows returned`
+4. Verify: click **Table Editor** — you should see these tables:
+   `applications, audit_logs, batch_phone_catalogue (missing until 002), batches, otp_events, orders, phone_models, rentals, roles, sessions, store_managers, stores, system_config, users, whitelist_records, whitelist_uploads`
+
+**Migration 002 — Batch phone catalogue + encrypted PII columns**
+1. Click **New query**, paste `scripts/migrations/002_batch_catalogue_and_pii.sql`, click **Run**
+2. Adds the `batch_phone_catalogue` table and encrypted PII columns on `applications`
+
+**Migration 003 — Admin edit tracking on applications**
+1. Click **New query**, paste `scripts/migrations/003_application_admin_edit.sql`, click **Run**
+2. Adds `admin_edited_by`, `admin_edited_at`, `admin_edit_notes`, `admin_editor_name` to `applications`
+
+**Migration 004 — Allow null salary band**
+1. Click **New query**, paste `scripts/migrations/004_whitelist_salary_band_nullable.sql`, click **Run**
+2. Makes `whitelist_records.salary_band` nullable so employees with no eligible bracket can still log in
+
+**Migration 005 — Enable RLS on all remaining tables**
+1. Click **New query**, paste `scripts/migrations/005_enable_rls_all_tables.sql`, click **Run**
+2. Enables Row Level Security on the 11 tables that migration 001 missed — **required before going live**
+3. The backend uses `service_role` which bypasses RLS, so nothing breaks
+
+> **If you see a `permission denied` error** from the API after applying migrations, paste and run just the three `GRANT` lines from the bottom of `001_initial_schema.sql`.
+
+> **If a migration fails partway through**, click **Table Editor**, check what was and wasn't created, fix the cause (usually a typo or partial paste), and re-run only that migration.
 
 ### 1.5 Create the storage bucket
 
@@ -81,9 +100,9 @@ If you see an error instead, copy the error message and check that you pasted th
 
 ## Part 2 — Backend Environment
 
-### 2.1 Generate JWT secrets
+### 2.1 Generate JWT secrets and encryption key
 
-You need two random secrets. Open a terminal in the `backend/` folder and run this command twice, saving each output:
+You need three random secrets. Open a terminal in the `backend/` folder and run this command three times, saving each output:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -91,7 +110,10 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 Run it once → copy the output → save as JWT_SECRET  
 Run it again → copy the output → save as JWT_REFRESH_SECRET  
-They must be different from each other.
+Run it a third time → copy the output → save as ENCRYPTION_KEY  
+All three must be different from each other.
+
+> **ENCRYPTION_KEY** must be exactly 64 hex characters (32 bytes). The command above always produces this. It is used for AES-256-GCM encryption of employee numbers and ID numbers stored in the applications table — required for the HR Excel export to work. Without it the backend will refuse to start.
 
 ### 2.2 Create the backend .env file
 
@@ -106,6 +128,7 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 JWT_SECRET=paste-first-generated-secret-here
 JWT_REFRESH_SECRET=paste-second-generated-secret-here
 BCRYPT_ROUNDS=12
+ENCRYPTION_KEY=paste-third-generated-secret-here
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 RESEND_API_KEY=re_leave_blank_for_now
@@ -132,7 +155,7 @@ SUPER_ADMIN_INITIAL_PASSWORD=ChangeMe#2026!
 Replace:
 - `SUPABASE_URL` → the Project URL from step 1.6
 - `SUPABASE_SERVICE_ROLE_KEY` → the service_role key from step 1.6
-- `JWT_SECRET` and `JWT_REFRESH_SECRET` → the two values you generated in step 2.1
+- `JWT_SECRET`, `JWT_REFRESH_SECRET`, and `ENCRYPTION_KEY` → the three values you generated in step 2.1
 - `SUPER_ADMIN_EMAIL` → the email address the admin will log in with
 - `SUPER_ADMIN_INITIAL_PASSWORD` → a temporary strong password (you will change this after first login)
 
@@ -258,8 +281,6 @@ If you get a file parsing error: make sure the CSV has the expected column heade
 7. You should see the green "Applications are open" banner
 
 If you get "Employee number or ID number not recognised": the whitelist upload may not have processed that record. Go back to the admin whitelist page and check the error count. Try a different employee from the CSV.
-
-> Note: the first employee login will be slow (5–30 seconds). This is expected — the backend must bcrypt-compare your credentials against every record in the whitelist. Performance improves once you have fewer records in staging or when we add an index optimisation later.
 
 ### 4.5 Submit an application
 1. Click **Apply Now**
@@ -435,6 +456,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 JWT_SECRET=
 JWT_REFRESH_SECRET=
 BCRYPT_ROUNDS=12
+ENCRYPTION_KEY=
 RESEND_API_KEY=
 SMS_PROVIDER=panacea
 PANACEA_API_KEY=

@@ -54,7 +54,7 @@ export interface PhoneModel {
   id: string;
   model_name: string;
   model_code: string | null;
-  retail_price: number;
+  cash_price: number;
   upfront_amount: number;
   rental_amount_7m: number;
   rental_amount_13m: number;

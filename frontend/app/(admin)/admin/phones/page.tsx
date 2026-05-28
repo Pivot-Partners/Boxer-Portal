@@ -7,7 +7,7 @@ interface PhoneModel {
 	id: string;
 	model_name: string;
 	model_code: string | null;
-	retail_price: number;
+	cash_price: number;
 	upfront_amount: number;
 	rental_amount_7m: number;
 	rental_amount_13m: number;
@@ -53,7 +53,7 @@ export default function PhonesPage() {
 	function startEdit(model: PhoneModel) {
 		setEditId(model.id);
 		setEditData({
-			retail_price: model.retail_price,
+			cash_price: model.cash_price,
 			upfront_amount: model.upfront_amount,
 			rental_amount_7m: model.rental_amount_7m,
 			rental_amount_13m: model.rental_amount_13m,
@@ -111,8 +111,8 @@ export default function PhonesPage() {
 								<div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
 									{(
 										[
-											{ key: 'retail_price', label: 'Retail price' },
-											{ key: 'upfront_amount', label: 'Cash upfront' },
+											{ key: 'cash_price', label: 'Cash price' },
+											{ key: 'upfront_amount', label: 'Rental upfront' },
 											{ key: 'rental_amount_7m', label: '7-month amount' },
 											{ key: 'rental_amount_13m', label: '13-month amount' },
 										] as const
@@ -161,8 +161,8 @@ export default function PhonesPage() {
 										)}
 									</div>
 									<div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
-										<span className="text-xs text-gray-500">Retail: {zar(model.retail_price)}</span>
-										<span className="text-xs text-gray-500">Cash: {zar(model.upfront_amount)}</span>
+										<span className="text-xs text-gray-500">Cash: {zar(model.cash_price)}</span>
+										<span className="text-xs text-gray-500">Upfront: {zar(model.upfront_amount)}</span>
 										<span className="text-xs text-gray-500">7m: {zar(model.rental_amount_7m)}/mo</span>
 										<span className="text-xs text-gray-500">13m: {zar(model.rental_amount_13m)}/mo</span>
 										<span className="text-xs text-gray-400">Min band: {model.min_salary_band}</span>

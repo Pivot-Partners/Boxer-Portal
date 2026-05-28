@@ -1,153 +1,164 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { parse } from 'csv-parse/sync';
-import { hashValue } from '../../services/auth/hashService';
+import { hmacHash } from '../../services/auth/hashService';
 
-// Salary band columns in the HR CSV
 const SALARY_BANDS = ['>3600', '>4400', '>6596', '>8796', '>13595', '>17196'] as const;
 type SalaryBand = typeof SALARY_BANDS[number];
 
-// Highest TRUE salary band for an employee = their effective band
 function getHighestBand(row: Record<string, string>): SalaryBand | null {
-  for (let i = SALARY_BANDS.length - 1; i >= 0; i--) {
-    if (row[SALARY_BANDS[i]!]?.trim().toUpperCase() === 'TRUE') {
-      return SALARY_BANDS[i]!;
-    }
-  }
-  return null;
+	for (let i = SALARY_BANDS.length - 1; i >= 0; i--) {
+		if (row[SALARY_BANDS[i]!]?.trim().toUpperCase() === 'TRUE') {
+			return SALARY_BANDS[i]!;
+		}
+	}
+	return null;
 }
 
-// Phone eligibility based on salary band
 const PHONE_ELIGIBILITY: Record<SalaryBand, SalaryBand[]> = {
-  '>3600': ['>3600'],
-  '>4400': ['>3600', '>4400'],
-  '>6596': ['>3600', '>4400', '>6596'],
-  '>8796': ['>3600', '>4400', '>6596', '>8796'],
-  '>13595': ['>3600', '>4400', '>6596', '>8796', '>13595'],
-  '>17196': ['>3600', '>4400', '>6596', '>8796', '>13595', '>17196'],
+	'>3600': ['>3600'],
+	'>4400': ['>3600', '>4400'],
+	'>6596': ['>3600', '>4400', '>6596'],
+	'>8796': ['>3600', '>4400', '>6596', '>8796'],
+	'>13595': ['>3600', '>4400', '>6596', '>8796', '>13595'],
+	'>17196': ['>3600', '>4400', '>6596', '>8796', '>13595', '>17196'],
 };
 
 const whitelistRoute: FastifyPluginAsync = async (fastify) => {
-  fastify.post('/m1/whitelist/upload', {
-    preHandler: fastify.requireRole('m1_admin', 'super_admin'),
-  }, async (request, reply) => {
-    const data = await request.file();
-    if (!data) {
-      return reply.code(400).send({ success: false, error: 'No file provided' });
-    }
+	fastify.post('/m1/whitelist/upload', {
+		preHandler: fastify.requireRole('m1_admin', 'super_admin'),
+	}, async (request, reply) => {
+		const fileList: Array<{ filename: string; buffer: Buffer }> = [];
 
-    const buffer = await data.toBuffer();
-    const csvText = buffer.toString('utf-8');
+		for await (const part of request.files()) {
+			const buffer = await part.toBuffer();
+			if (buffer.length > 0) {
+				fileList.push({ filename: part.filename, buffer });
+			}
+		}
 
-    let rows: Record<string, string>[];
-    try {
-      rows = parse(csvText, { columns: true, skip_empty_lines: true, trim: true });
-    } catch {
-      return reply.code(400).send({ success: false, error: 'Could not parse CSV file' });
-    }
+		if (fileList.length === 0) {
+			return reply.code(400).send({ success: false, error: 'No file provided' });
+		}
 
-    // Upload file to Supabase Storage
-    const fileName = `whitelist-${Date.now()}.csv`;
-    const storagePath = `whitelist-uploads/${fileName}`;
-    await fastify.db.storage.from('whitelist-uploads').upload(storagePath, buffer);
+		// Parse all files before touching DB — fail fast on any bad CSV
+		const allRows: Record<string, string>[] = [];
+		for (const { filename, buffer } of fileList) {
+			const csvText = buffer.toString('utf-8');
+			let rows: Record<string, string>[];
+			try {
+				rows = parse(csvText, { columns: true, skip_empty_lines: true, trim: true });
+			} catch {
+				return reply.code(400).send({ success: false, error: `Could not parse CSV: ${filename}` });
+			}
+			allRows.push(...rows);
+		}
 
-    // Create upload record
-    const uploadId = crypto.randomUUID();
-    await fastify.db.from('whitelist_uploads').insert({
-      id: uploadId,
-      file_name: data.filename,
-      storage_path: storagePath,
-      uploaded_by: request.jwtPayload.user_id,
-      record_count: rows.length,
-      status: 'processing',
-    });
+		const uploadId = crypto.randomUUID();
 
-    // Mark all previous records as not current
-    await fastify.db.from('whitelist_records').update({ is_current: false }).eq('is_current', true);
+		// Upload files to storage under a shared folder
+		for (let i = 0; i < fileList.length; i++) {
+			const storagePath = `whitelist-uploads/${uploadId}/${i}-${fileList[i]!.filename}`;
+			await fastify.db.storage.from('whitelist-uploads').upload(storagePath, fileList[i]!.buffer);
+		}
 
-    let validCount = 0;
-    let errorCount = 0;
-    const records = [];
+		const combinedFileName = fileList.length === 1
+			? fileList[0]!.filename
+			: fileList.map(f => f.filename).join(', ');
 
-    // Get phone models to map salary bands to model IDs
-    const { data: phoneModels } = await fastify.db
-      .from('phone_models')
-      .select('id, model_name, min_salary_band')
-      .eq('is_active', true);
+		await fastify.db.from('whitelist_uploads').insert({
+			id: uploadId,
+			file_name: combinedFileName.length <= 255 ? combinedFileName : `${fileList.length} files`,
+			storage_path: `whitelist-uploads/${uploadId}/`,
+			uploaded_by: request.jwtPayload.user_id,
+			record_count: allRows.length,
+			status: 'processing',
+		});
 
-    for (const row of rows) {
-      const empNo = row['EmployeeNo']?.trim();
-      const idNo = row['Identity Number']?.trim();
-      const firstName = row['First names']?.trim();
-      const lastName = row['Last name']?.trim();
-      const storeNumber = row['Store Number']?.trim();
-      const category = row['Category']?.trim();
+		// Flip is_current exactly once — after all files parsed, before inserting new records
+		await fastify.db.from('whitelist_records').update({ is_current: false }).eq('is_current', true);
 
-      if (!empNo || !idNo || !firstName || !lastName) {
-        errorCount++;
-        continue;
-      }
+		const { data: phoneModels } = await fastify.db
+			.from('phone_models')
+			.select('id, model_name, min_salary_band')
+			.eq('is_active', true);
 
-      const salaryBand = getHighestBand(row);
-      if (!salaryBand) {
-        errorCount++;
-        continue;
-      }
+		let validCount = 0;
+		let errorCount = 0;
+		const records = [];
 
-      const eligibleBands = PHONE_ELIGIBILITY[salaryBand];
-      const eligibleModelIds = (phoneModels ?? [])
-        .filter((m: any) => eligibleBands.includes(m.min_salary_band))
-        .map((m: any) => m.id);
+		for (const row of allRows) {
+			const empNo = row['EmployeeNo']?.trim();
+			const idNo = row['Identity Number']?.trim();
+			const firstName = row['First names']?.trim();
+			const lastName = row['Last name']?.trim();
+			// Permanent CSV uses "Store Num", flexi CSV uses "Store Number"
+			const storeNumber = (row['Store Number'] ?? row['Store Num'])?.trim();
+			const category = row['Category']?.trim();
+			const placeOfWork = row['Pers. subarea text']?.trim() || null;
 
-      try {
-        const empHash = await hashValue(empNo);
-        const idHash = await hashValue(idNo);
+			if (!empNo || !idNo) {
+				errorCount++;
+				continue;
+			}
 
-        records.push({
-          upload_id: uploadId,
-          employee_number_hash: empHash,
-          id_number_hash: idHash,
-          display_name: `${firstName} ${lastName}`,
-          store_code: storeNumber && storeNumber !== '#N/A' ? storeNumber : null,
-          employment_type: category?.toLowerCase() === 'permanent' ? 'permanent' : 'flexi',
-          salary_band: salaryBand,
-          eligible_model_ids: eligibleModelIds,
-          is_current: true,
-        });
-        validCount++;
-      } catch {
-        errorCount++;
-      }
-    }
+			const salaryBand = getHighestBand(row);
+			const eligibleModelIds = salaryBand
+				? (phoneModels ?? [])
+					.filter((m: any) => PHONE_ELIGIBILITY[salaryBand].includes(m.min_salary_band))
+					.map((m: any) => m.id)
+				: [];
 
-    // Batch insert in chunks of 100
-    for (let i = 0; i < records.length; i += 100) {
-      await fastify.db.from('whitelist_records').insert(records.slice(i, i + 100));
-    }
+			records.push({
+				upload_id: uploadId,
+				employee_number_hash: hmacHash(empNo),
+				id_number_hash: hmacHash(idNo),
+				display_name: [firstName, lastName].filter(Boolean).join(' ') || empNo,
+				first_name: firstName || null,
+				last_name: lastName || null,
+				store_code: storeNumber && storeNumber !== '#N/A' ? storeNumber : null,
+				place_of_work: placeOfWork,
+				employment_type: category?.toLowerCase() === 'permanent' ? 'permanent' : 'flexi',
+				salary_band: salaryBand ?? null,
+				eligible_model_ids: eligibleModelIds,
+				is_current: true,
+			});
+			validCount++;
+		}
 
-    await fastify.db.from('whitelist_uploads').update({
-      status: 'active',
-      valid_count: validCount,
-      error_count: errorCount,
-    }).eq('id', uploadId);
+		for (let i = 0; i < records.length; i += 100) {
+			await fastify.db.from('whitelist_records').insert(records.slice(i, i + 100));
+		}
 
-    return reply.send({
-      success: true,
-      data: { upload_id: uploadId, record_count: rows.length, valid_count: validCount, error_count: errorCount },
-    });
-  });
+		await fastify.db.from('whitelist_uploads').update({
+			status: 'active',
+			valid_count: validCount,
+			error_count: errorCount,
+		}).eq('id', uploadId);
 
-  fastify.get('/m1/whitelist/uploads', {
-    preHandler: fastify.requireRole('m1_admin', 'super_admin'),
-  }, async (request, reply) => {
-    const { data, error } = await fastify.db
-      .from('whitelist_uploads')
-      .select('id, file_name, uploaded_at, record_count, valid_count, error_count, status')
-      .order('uploaded_at', { ascending: false })
-      .limit(10);
+		return reply.send({
+			success: true,
+			data: {
+				upload_id: uploadId,
+				files: fileList.length,
+				record_count: allRows.length,
+				valid_count: validCount,
+				error_count: errorCount,
+			},
+		});
+	});
 
-    if (error) return reply.code(500).send({ success: false, error: 'Failed to fetch uploads' });
-    return reply.send({ success: true, data });
-  });
+	fastify.get('/m1/whitelist/uploads', {
+		preHandler: fastify.requireRole('m1_admin', 'super_admin'),
+	}, async (request, reply) => {
+		const { data, error } = await fastify.db
+			.from('whitelist_uploads')
+			.select('id, file_name, uploaded_at, record_count, valid_count, error_count, status')
+			.order('uploaded_at', { ascending: false })
+			.limit(10);
+
+		if (error) return reply.code(500).send({ success: false, error: 'Failed to fetch uploads' });
+		return reply.send({ success: true, data });
+	});
 };
 
 export default whitelistRoute;

@@ -68,7 +68,7 @@ CREATE TABLE phone_models (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   model_name varchar(100) NOT NULL,
   model_code varchar(50),
-  retail_price decimal(10,2) NOT NULL,
+  cash_price decimal(10,2) NOT NULL,
   upfront_amount decimal(10,2) NOT NULL,
   rental_amount_7m decimal(10,2) NOT NULL,
   rental_amount_13m decimal(10,2) NOT NULL,
@@ -147,6 +147,7 @@ CREATE TABLE batches (
   cutoff_at timestamptz NOT NULL,
   status varchar(30) NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed','processing','awaiting_approval','approved','orders_submitted','completed')),
   total_applications integer DEFAULT 0,
+  pending_applications integer DEFAULT 0,
   valid_applications integer DEFAULT 0,
   cancelled_applications integer DEFAULT 0,
   rejected_applications integer DEFAULT 0,
@@ -278,7 +279,7 @@ INSERT INTO system_config (module, config_key, config_value, description) VALUES
 -- ============================================================
 -- Seed data: Phone catalogue
 -- ============================================================
-INSERT INTO phone_models (model_name, model_code, retail_price, upfront_amount, rental_amount_7m, rental_amount_13m, min_salary_band, display_order, is_active) VALUES
+INSERT INTO phone_models (model_name, model_code, cash_price, upfront_amount, rental_amount_7m, rental_amount_13m, min_salary_band, display_order, is_active) VALUES
   ('Samsung A05 (Green)',  'A05-GRN', 1649, 450,  320, 180, '>3600', 1, true),
   ('Samsung A07 (Black)',  'A07-BLK', 2199, 600,  410, 230, '>3600', 2, true),
   ('Samsung A17 (Black)',  'A17-BLK', 3299, 900,  610, 340, '>3600', 3, true),
@@ -304,3 +305,10 @@ ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
 
 -- Service role bypasses RLS (used by backend only)
 -- Anon key has no policies = no access
+
+-- ============================================================
+-- PostgREST grants (required for Supabase API access)
+-- ============================================================
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;

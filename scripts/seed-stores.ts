@@ -1,5 +1,5 @@
 /**
- * Seeds all stores from the CSV files in E:\Work\boxer\docs\
+ * Seeds all stores from the CSV files in supporting docs/docs/
  * Run once after applying the DB schema: npx tsx scripts/seed-stores.ts
  */
 import { createClient } from '@supabase/supabase-js';
@@ -8,7 +8,7 @@ import { parse } from 'csv-parse/sync';
 import { join } from 'path';
 import 'dotenv/config';
 
-const DOCS_DIR = join(__dirname, '../../boxer/docs');
+const DOCS_DIR = join(__dirname, '../supporting docs/docs');
 
 const db = createClient(
   process.env.SUPABASE_URL!,

@@ -9,6 +9,7 @@ interface Batch {
 	cutoff_at: string;
 	status: string;
 	total_applications: number;
+	pending_applications: number;
 	valid_applications: number;
 	cancelled_applications: number;
 	rejected_applications: number;
@@ -24,7 +25,19 @@ interface Application {
 	rental_term: number;
 	status: string;
 	submitted_at: string;
-	phone_models: { model_name: string } | null;
+	batch_phone_catalogue: { model_name: string } | null;
+}
+
+interface CatalogueEntry {
+	id: string;
+	source_model_id: string;
+	model_name: string;
+	cash_price: number;
+	upfront_amount: number;
+	rental_amount_7m: number;
+	rental_amount_13m: number;
+	is_available: boolean;
+	display_order: number;
 }
 
 const STATUS_COLOUR: Record<string, string> = {
@@ -47,17 +60,32 @@ const APP_STATUS_COLOUR: Record<string, string> = {
 	rejected: 'bg-red-100 text-red-600',
 };
 
-function months(date: string) {
-	return new Date(date + '-01').toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' });
+function zar(n: number) {
+	return `R ${Number(n).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`;
 }
+
+function months(date: string) {
+	return new Date(date).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
+const EXPORTABLE_STATUSES = new Set(['awaiting_approval', 'approved', 'orders_submitted', 'completed']);
 
 export default function BatchesPage() {
 	const [batches, setBatches] = useState<Batch[]>([]);
 	const [applications, setApplications] = useState<Application[]>([]);
+	const [catalogue, setCatalogue] = useState<CatalogueEntry[]>([]);
 	const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
 	const [loading, setLoading] = useState(true);
+
 	const [approving, setApproving] = useState(false);
 	const [approveError, setApproveError] = useState('');
+	const [closing, setClosing] = useState(false);
+	const [closeError, setCloseError] = useState('');
+	const [seeding, setSeeding] = useState(false);
+	const [seedError, setSeedError] = useState('');
+	const [seedSuccess, setSeedSuccess] = useState('');
+	const [togglingId, setTogglingId] = useState<string | null>(null);
+
 	const [openForm, setOpenForm] = useState(false);
 	const [newMonth, setNewMonth] = useState('');
 	const [newCutoff, setNewCutoff] = useState('');
@@ -68,7 +96,9 @@ export default function BatchesPage() {
 		const res = await api<{ data: Batch[] }>('/m1/batches');
 		const list = res.data ?? [];
 		setBatches(list);
-		if (!selectedBatch && list.length > 0) setSelectedBatch(list[0]!);
+		if (!selectedBatch && list.length > 0) {
+			setSelectedBatch(list.find((b) => b.status === 'open') ?? list[0]!);
+		}
 	}
 
 	async function fetchApplications(batchId: string) {
@@ -80,13 +110,41 @@ export default function BatchesPage() {
 		}
 	}
 
+	async function fetchCatalogue(batchId: string) {
+		try {
+			const res = await api<{ data: CatalogueEntry[] }>(`/m1/batches/${batchId}/catalogue`);
+			setCatalogue(res.data ?? []);
+		} catch {
+			setCatalogue([]);
+		}
+	}
+
 	useEffect(() => {
 		fetchBatches().finally(() => setLoading(false));
 	}, []);
 
 	useEffect(() => {
-		if (selectedBatch) fetchApplications(selectedBatch.id);
+		if (selectedBatch) {
+			fetchApplications(selectedBatch.id);
+			fetchCatalogue(selectedBatch.id);
+			setSeedError('');
+			setSeedSuccess('');
+		}
 	}, [selectedBatch?.id]);
+
+	async function closeBatch() {
+		if (!selectedBatch) return;
+		setClosing(true);
+		setCloseError('');
+		try {
+			await api(`/m1/batches/${selectedBatch.id}/close`, { method: 'POST' });
+			await fetchBatches();
+		} catch (err) {
+			setCloseError(err instanceof Error ? err.message : 'Failed to close batch');
+		} finally {
+			setClosing(false);
+		}
+	}
 
 	async function approveBatch() {
 		if (!selectedBatch) return;
@@ -102,6 +160,36 @@ export default function BatchesPage() {
 		}
 	}
 
+	async function seedCatalogue() {
+		if (!selectedBatch) return;
+		setSeeding(true);
+		setSeedError('');
+		setSeedSuccess('');
+		try {
+			const res = await api<{ data: { seeded: number } }>(`/m1/batches/${selectedBatch.id}/catalogue/seed`, { method: 'POST' });
+			setSeedSuccess(`Catalogue seeded — ${res.data?.seeded ?? 0} phone model(s) added.`);
+			await fetchCatalogue(selectedBatch.id);
+		} catch (err) {
+			setSeedError(err instanceof Error ? err.message : 'Seed failed');
+		} finally {
+			setSeeding(false);
+		}
+	}
+
+	async function toggleAvailability(entry: CatalogueEntry) {
+		if (!selectedBatch) return;
+		setTogglingId(entry.id);
+		try {
+			await api(`/m1/batches/${selectedBatch.id}/catalogue/${entry.id}`, {
+				method: 'PATCH',
+				body: { is_available: !entry.is_available },
+			});
+			await fetchCatalogue(selectedBatch.id);
+		} finally {
+			setTogglingId(null);
+		}
+	}
+
 	async function openBatch(e: React.FormEvent) {
 		e.preventDefault();
 		setOpening(true);
@@ -109,7 +197,7 @@ export default function BatchesPage() {
 		try {
 			await api('/m1/batches', {
 				method: 'POST',
-				body: { batch_month: newMonth, cutoff_at: new Date(newCutoff).toISOString() },
+				body: { batch_month: newMonth + '-01', cutoff_at: new Date(newCutoff).toISOString() },
 			});
 			setOpenForm(false);
 			setNewMonth('');
@@ -175,9 +263,7 @@ export default function BatchesPage() {
 							/>
 						</div>
 					</div>
-					{openError && (
-						<p className="text-sm text-red-600">{openError}</p>
-					)}
+					{openError && <p className="text-sm text-red-600">{openError}</p>}
 					<div className="flex gap-3">
 						<button
 							type="submit"
@@ -231,6 +317,7 @@ export default function BatchesPage() {
 				{/* Batch detail */}
 				{selectedBatch && (
 					<div className="lg:col-span-2 space-y-4">
+						{/* Batch summary card */}
 						<div className="bg-white border border-gray-200 rounded-xl p-5">
 							<div className="flex items-start justify-between gap-4">
 								<div>
@@ -246,16 +333,28 @@ export default function BatchesPage() {
 
 							<div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-100">
 								<Stat label="Total" value={selectedBatch.total_applications ?? 0} />
-								<Stat label="Valid" value={selectedBatch.valid_applications ?? 0} />
+								<Stat label="Pending" value={selectedBatch.pending_applications ?? 0} />
 								<Stat label="Cancelled" value={selectedBatch.cancelled_applications ?? 0} />
 								<Stat label="Rejected" value={selectedBatch.rejected_applications ?? 0} />
 							</div>
 
+							{selectedBatch.status === 'open' && (
+								<div className="mt-4 pt-4 border-t border-gray-100">
+									{closeError && <p className="text-sm text-red-600 mb-2">{closeError}</p>}
+									<button
+										onClick={closeBatch}
+										disabled={closing}
+										className="px-5 py-2 bg-gray-700 hover:bg-gray-800 text-white text-sm font-semibold rounded-lg disabled:opacity-50 transition-colors"
+									>
+										{closing ? 'Closing…' : 'Close batch'}
+									</button>
+									<p className="text-xs text-gray-400 mt-1">No new applications will be accepted once closed.</p>
+								</div>
+							)}
+
 							{selectedBatch.status === 'awaiting_approval' && (
 								<div className="mt-4 pt-4 border-t border-gray-100">
-									{approveError && (
-										<p className="text-sm text-red-600 mb-2">{approveError}</p>
-									)}
+									{approveError && <p className="text-sm text-red-600 mb-2">{approveError}</p>}
 									<button
 										onClick={approveBatch}
 										disabled={approving}
@@ -266,10 +365,83 @@ export default function BatchesPage() {
 								</div>
 							)}
 
+							{EXPORTABLE_STATUSES.has(selectedBatch.status) && (
+								<div className="mt-4 pt-4 border-t border-gray-100">
+									<a
+										href={`${process.env.NEXT_PUBLIC_API_BASE_URL}/m1/batches/${selectedBatch.id}/export`}
+										target="_blank"
+										rel="noopener noreferrer"
+										className="inline-flex items-center gap-2 px-5 py-2 bg-primary-700 hover:bg-primary-800 text-white text-sm font-semibold rounded-lg transition-colors"
+									>
+										Download HR Export (.xlsx)
+									</a>
+									<p className="text-xs text-gray-400 mt-1">Password-protected Excel for HR payroll deductions.</p>
+								</div>
+							)}
+
 							{selectedBatch.approved_at && (
 								<p className="text-xs text-gray-500 mt-4 pt-4 border-t border-gray-100">
 									Approved {new Date(selectedBatch.approved_at).toLocaleDateString('en-ZA')}
 								</p>
+							)}
+						</div>
+
+						{/* Phone catalogue for this batch */}
+						<div className="bg-white border border-gray-200 rounded-xl p-5">
+							<div className="flex items-center justify-between gap-4 mb-4">
+								<div>
+									<h3 className="font-semibold">Phone Catalogue</h3>
+									<p className="text-xs text-gray-500 mt-0.5">
+										Prices locked to this batch. Toggle availability to hide a model from employees.
+									</p>
+								</div>
+								<button
+									onClick={seedCatalogue}
+									disabled={seeding}
+									className="shrink-0 px-3 py-1.5 text-xs font-medium border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+								>
+									{seeding ? 'Seeding…' : catalogue.length === 0 ? 'Seed catalogue' : 'Re-sync from master'}
+								</button>
+							</div>
+
+							{seedError && <p className="text-sm text-red-600 mb-3">{seedError}</p>}
+							{seedSuccess && <p className="text-sm text-green-600 mb-3">{seedSuccess}</p>}
+
+							{catalogue.length === 0 ? (
+								<div className="rounded-lg bg-yellow-50 border border-yellow-200 p-4 text-sm text-yellow-800">
+									No phone models assigned to this batch yet. Click <strong>Seed catalogue</strong> to copy the current phone models in.
+								</div>
+							) : (
+								<div className="space-y-2">
+									{catalogue.map((entry) => (
+										<div
+											key={entry.id}
+											className={`flex items-center justify-between gap-4 p-3 rounded-lg border transition-colors ${
+												entry.is_available ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50 opacity-60'
+											}`}
+										>
+											<div className="min-w-0">
+												<p className={`text-sm font-medium ${entry.is_available ? 'text-gray-900' : 'text-gray-400 line-through'}`}>
+													{entry.model_name}
+												</p>
+												<p className="text-xs text-gray-500 mt-0.5">
+													Cash {zar(entry.cash_price)} · Upfront {zar(entry.upfront_amount)} · 7m {zar(entry.rental_amount_7m)}/mo · 13m {zar(entry.rental_amount_13m)}/mo
+												</p>
+											</div>
+											<button
+												onClick={() => toggleAvailability(entry)}
+												disabled={togglingId === entry.id}
+												className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-50 ${
+													entry.is_available
+														? 'bg-green-100 text-green-800 hover:bg-red-100 hover:text-red-700'
+														: 'bg-gray-100 text-gray-500 hover:bg-green-100 hover:text-green-800'
+												}`}
+											>
+												{togglingId === entry.id ? '…' : entry.is_available ? 'Available' : 'Unavailable'}
+											</button>
+										</div>
+									))}
+								</div>
 							)}
 						</div>
 
@@ -298,7 +470,7 @@ export default function BatchesPage() {
 															<p className="text-xs text-gray-500">{a.place_of_work}</p>
 														</td>
 														<td className="px-4 py-3 text-gray-700">
-															{a.phone_models?.model_name ?? '—'}
+															{a.batch_phone_catalogue?.model_name ?? '—'}
 														</td>
 														<td className="px-4 py-3 text-gray-700">
 															{a.rental_term === 0 ? 'Cash' : `${a.rental_term}m`}

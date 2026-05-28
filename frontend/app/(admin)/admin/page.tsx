@@ -52,7 +52,7 @@ export default function AdminDashboard() {
 		]).finally(() => setLoading(false));
 	}, []);
 
-	const currentBatch = batches[0];
+	const currentBatch = batches.find((b) => b.status === 'open') ?? batches[0];
 	const latestUpload = uploads[0];
 
 	if (loading) {
@@ -78,7 +78,7 @@ export default function AdminDashboard() {
 					label="Current batch"
 					value={
 						currentBatch
-							? new Date(currentBatch.batch_month + '-01').toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' })
+							? new Date(currentBatch.batch_month).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 							: 'No active batch'
 					}
 					sub={currentBatch ? <StatusBadge status={currentBatch.status} /> : undefined}

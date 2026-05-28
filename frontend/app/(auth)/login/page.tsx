@@ -55,6 +55,10 @@ export default function LoginPage() {
 				method: 'POST',
 				body: { employee_number: empNo.trim(), id_number: idNo.trim() },
 			});
+			// Keep credentials in sessionStorage so the apply form can include them
+			// in the submission body for encrypted storage. Cleared when tab closes.
+			sessionStorage.setItem('boxer_emp_no', empNo.trim());
+			sessionStorage.setItem('boxer_id_no', idNo.trim());
 			router.replace('/portal');
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Login failed');

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 *)",
+      "Bash(xargs grep *)",
+      "Bash(grep -E \"\\\\.\\(env|json\\)$\")",
+      "Bash(grep -E \"\\\\.ts$\")",
+      "Bash(npx tsc *)"
+    ]
+  }
+}

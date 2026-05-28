@@ -1,7 +1,9 @@
+import 'dotenv/config';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import databasePlugin from './plugins/database';
 import authPlugin from './plugins/auth';
@@ -15,6 +17,7 @@ import phoneModelsRoute from './routes/m1/phoneModels';
 import applicationsRoute from './routes/m1/applications';
 import whitelistRoute from './routes/m1/whitelist';
 import batchRoute from './routes/m1/batches';
+import exportRoute from './routes/m1/export';
 
 const fastify = Fastify({
   logger: {
@@ -30,6 +33,7 @@ async function start() {
     credentials: true,
   });
   await fastify.register(cookie);
+  await fastify.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } }); // 50 MB — HR CSVs can be ~18k rows × 2 files
   await fastify.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute',
@@ -50,6 +54,7 @@ async function start() {
     await v1.register(applicationsRoute);
     await v1.register(whitelistRoute);
     await v1.register(batchRoute);
+    await v1.register(exportRoute);
   }, { prefix: '/v1' });
 
   fastify.get('/health', async () => ({ status: 'ok', ts: new Date().toISOString() }));

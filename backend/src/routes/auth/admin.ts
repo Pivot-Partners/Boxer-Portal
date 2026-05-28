@@ -87,7 +87,7 @@ const adminAuthRoute: FastifyPluginAsync = async (fastify) => {
         httpOnly: true,
         sameSite: 'strict',
         secure: process.env.NODE_ENV === 'production',
-        path: '/v1/auth/refresh',
+        path: '/',
         maxAge: 7 * 24 * 60 * 60,
       });
 
