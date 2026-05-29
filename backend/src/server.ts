@@ -13,6 +13,7 @@ import logoutRoute from './routes/auth/logout';
 import meRoute from './routes/auth/me';
 import refreshRoute from './routes/auth/refresh';
 import storesRoute from './routes/m1/stores';
+import storeCategoriesRoute from './routes/m1/storeCategories';
 import phoneModelsRoute from './routes/m1/phoneModels';
 import applicationsRoute from './routes/m1/applications';
 import whitelistRoute from './routes/m1/whitelist';
@@ -50,6 +51,7 @@ async function start() {
     await v1.register(meRoute);
     await v1.register(refreshRoute);
     await v1.register(storesRoute);
+    await v1.register(storeCategoriesRoute);
     await v1.register(phoneModelsRoute);
     await v1.register(applicationsRoute);
     await v1.register(whitelistRoute);

@@ -2,22 +2,16 @@
 
 export type Role = 'employee' | 'store_manager' | 'm1_admin' | 'm2_admin' | 'm2_reviewer' | 'super_admin';
 
-export type StoreCategory =
-  | 'supermarket_mini'
-  | 'liquor'
-  | 'build'
-  | 'distribution_center'
-  | 'meat_factory'
-  | 'head_office';
+// Dynamic — driven by the store_categories table, not a hard-coded enum.
+export type StoreCategory = string;
 
-export const STORE_CATEGORY_LABELS: Record<StoreCategory, string> = {
-  supermarket_mini: 'Boxer Supermarket or Boxer Mini',
-  liquor: 'Boxer Liquor',
-  build: 'Boxer Build',
-  distribution_center: 'Distribution Center',
-  meat_factory: 'Meat Factory',
-  head_office: 'Head Office',
-};
+export interface StoreCategoryRecord {
+  key: string;
+  label: string;
+  is_single_store: boolean;
+  display_order: number;
+  is_active: boolean;
+}
 
 export type EmploymentType = 'permanent' | 'flexi';
 

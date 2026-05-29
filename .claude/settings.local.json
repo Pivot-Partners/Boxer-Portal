@@ -5,7 +5,9 @@
       "Bash(xargs grep *)",
       "Bash(grep -E \"\\\\.\\(env|json\\)$\")",
       "Bash(grep -E \"\\\\.ts$\")",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(curl *)",
+      "Bash(npm run *)"
     ]
   }
 }

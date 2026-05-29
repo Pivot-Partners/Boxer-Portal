@@ -7,12 +7,12 @@ import { api } from '@/lib/api';
 type Tab = 'employee' | 'admin';
 
 const inputCls =
-	'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors';
+	'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors bg-white';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
 	return (
 		<div>
-			<label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+			<label className="block text-sm font-semibold text-gray-700 mb-1.5">{label}</label>
 			{children}
 		</div>
 	);
@@ -23,7 +23,7 @@ function SubmitBtn({ loading, label }: { loading: boolean; label: string }) {
 		<button
 			type="submit"
 			disabled={loading}
-			className="w-full py-2.5 px-4 bg-primary-700 hover:bg-primary-800 text-white font-medium rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+			className="w-full py-2.5 px-4 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed tracking-wide"
 		>
 			{loading ? 'Please wait…' : label}
 		</button>
@@ -85,38 +85,47 @@ export default function LoginPage() {
 	}
 
 	return (
-		<div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
-			<div className="w-full max-w-md">
-				{/* Logo */}
-				<div className="text-center mb-8">
-					<div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary-700 mb-4">
-						<span className="text-white text-xl font-bold select-none">B</span>
+		<div className="min-h-screen flex items-center justify-center p-4 bg-[#1a1a1a]">
+			<div className="w-full max-w-[400px]">
+				<div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+					{/* Brand header */}
+					<div className="bg-primary-600 px-8 py-6">
+						<div className="flex items-center gap-4">
+							<div className="w-11 h-11 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+								<span className="text-white font-black text-xl leading-none select-none">B</span>
+							</div>
+							<div>
+								<p className="text-white font-black text-2xl tracking-widest leading-tight">BOXER</p>
+								<p className="text-white/65 text-xs tracking-wide mt-0.5">Operations Portal</p>
+							</div>
+						</div>
 					</div>
-					<h1 className="text-2xl font-bold text-gray-900">Boxer Operations Portal</h1>
-					<p className="text-sm text-gray-500 mt-1">Staff Phone Rental Scheme</p>
-				</div>
 
-				<div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
 					{/* Tabs */}
-					<div className="flex border-b border-gray-200">
+					<div className="flex border-b border-gray-200 bg-gray-50/70">
 						{(['employee', 'admin'] as Tab[]).map((t) => (
 							<button
 								key={t}
 								onClick={() => switchTab(t)}
-								className={`flex-1 py-3 text-sm font-medium transition-colors ${
+								className={`flex-1 py-3.5 text-sm font-semibold transition-colors border-b-2 ${
 									tab === t
-										? 'text-primary-700 border-b-2 border-primary-700'
-										: 'text-gray-500 hover:text-gray-700'
+										? 'text-primary-600 border-primary-600 bg-white'
+										: 'text-gray-500 border-transparent hover:text-gray-700'
 								}`}
 							>
-								{t === 'employee' ? 'Employee / Store Manager' : 'Admin'}
+								{t === 'employee' ? 'Employee / Manager' : 'Admin'}
 							</button>
 						))}
 					</div>
 
-					<div className="p-6">
+					{/* Form body */}
+					<div className="px-8 py-7">
 						{error && (
-							<div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+							<div className="mb-5 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-start gap-2">
+								<svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+									<circle cx="12" cy="12" r="10" />
+									<path strokeLinecap="round" d="M12 8v4M12 16h.01" />
+								</svg>
 								{error}
 							</div>
 						)}
@@ -145,8 +154,10 @@ export default function LoginPage() {
 										className={inputCls}
 									/>
 								</Field>
-								<SubmitBtn loading={loading} label="Sign In" />
-								<p className="text-xs text-gray-500 text-center">
+								<div className="pt-1">
+									<SubmitBtn loading={loading} label="Sign In" />
+								</div>
+								<p className="text-xs text-gray-400 text-center">
 									Your details are verified against the HR whitelist.
 								</p>
 							</form>
@@ -172,14 +183,16 @@ export default function LoginPage() {
 										className={inputCls}
 									/>
 								</Field>
-								<SubmitBtn loading={loading} label="Sign In" />
+								<div className="pt-1">
+									<SubmitBtn loading={loading} label="Sign In" />
+								</div>
 							</form>
 						)}
 					</div>
 				</div>
 
-				<p className="text-center text-xs text-gray-400 mt-6">
-					Confidential — Boxer Stores Internal System
+				<p className="text-center text-xs text-gray-600 mt-5">
+					Confidential - Boxer Stores Internal System
 				</p>
 			</div>
 		</div>

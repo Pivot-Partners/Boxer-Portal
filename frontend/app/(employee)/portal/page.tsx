@@ -55,12 +55,12 @@ const BAND_FLOOR: Record<string, number> = {
 };
 
 const STATUS_LABEL: Record<string, { text: string; colour: string }> = {
-	pending: { text: 'Submitted — awaiting batch', colour: 'bg-yellow-100 text-yellow-800' },
+	pending: { text: 'Submitted - awaiting batch', colour: 'bg-yellow-100 text-yellow-800' },
 	validated: { text: 'Approved', colour: 'bg-green-100 text-green-800' },
 	converted_to_order: { text: 'Order placed', colour: 'bg-blue-100 text-blue-800' },
 	cancelled_by_employee: { text: 'Cancelled by you', colour: 'bg-gray-100 text-gray-600' },
-	cancelled_no_whitelist: { text: 'Cancelled — eligibility issue', colour: 'bg-red-100 text-red-700' },
-	cancelled_no_stock: { text: 'Cancelled — out of stock', colour: 'bg-red-100 text-red-700' },
+	cancelled_no_whitelist: { text: 'Cancelled - eligibility issue', colour: 'bg-red-100 text-red-700' },
+	cancelled_no_stock: { text: 'Cancelled - out of stock', colour: 'bg-red-100 text-red-700' },
 	rejected: { text: 'Rejected', colour: 'bg-red-100 text-red-700' },
 };
 
@@ -69,7 +69,7 @@ function zar(n: number) {
 }
 
 function rentalLabel(term: number, cat: Application['batch_phone_catalogue']) {
-	if (term === 0) return `Cash — ${zar(cat.cash_price)} deducted once`;
+	if (term === 0) return `Cash - ${zar(cat.cash_price)} deducted once`;
 	if (term === 7) return `7 months @ ${zar(cat.rental_amount_7m)}/month`;
 	return `13 months @ ${zar(cat.rental_amount_13m)}/month`;
 }
@@ -251,7 +251,7 @@ export default function PortalPage() {
 							<div>
 								<p className="font-semibold text-gray-900">Change your selection</p>
 								<p className="text-xs text-gray-500 mt-0.5">
-									Your original submission date is preserved — this only changes your phone and payment option.
+									Your original submission date is preserved - this only changes your phone and payment option.
 								</p>
 							</div>
 

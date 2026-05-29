@@ -167,7 +167,7 @@ export default function BatchesPage() {
 		setSeedSuccess('');
 		try {
 			const res = await api<{ data: { seeded: number } }>(`/m1/batches/${selectedBatch.id}/catalogue/seed`, { method: 'POST' });
-			setSeedSuccess(`Catalogue seeded — ${res.data?.seeded ?? 0} phone model(s) added.`);
+			setSeedSuccess(`Catalogue seeded - ${res.data?.seeded ?? 0} phone model(s) added.`);
 			await fetchCatalogue(selectedBatch.id);
 		} catch (err) {
 			setSeedError(err instanceof Error ? err.message : 'Seed failed');
@@ -470,7 +470,7 @@ export default function BatchesPage() {
 															<p className="text-xs text-gray-500">{a.place_of_work}</p>
 														</td>
 														<td className="px-4 py-3 text-gray-700">
-															{a.batch_phone_catalogue?.model_name ?? '—'}
+															{a.batch_phone_catalogue?.model_name ?? '-'}
 														</td>
 														<td className="px-4 py-3 text-gray-700">
 															{a.rental_term === 0 ? 'Cash' : `${a.rental_term}m`}

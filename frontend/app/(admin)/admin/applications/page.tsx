@@ -47,6 +47,9 @@ interface AppDetail {
 	admin_edited_at: string | null;
 	admin_editor_name: string | null;
 	admin_edit_notes: string | null;
+	salary_band: string | null;
+	eligible_model_ids: string[];
+	whitelist_found: boolean;
 	batch_phone_catalogue: {
 		id: string;
 		model_name: string;
@@ -108,7 +111,7 @@ const FILTER_STATUSES = Object.keys(STATUS_LABEL);
 
 function appName(app: Pick<AppListItem, 'first_name' | 'last_name' | 'display_name'>) {
 	if (app.first_name || app.last_name) return `${app.first_name ?? ''} ${app.last_name ?? ''}`.trim();
-	return app.display_name ?? '—';
+	return app.display_name ?? '-';
 }
 
 function termLabel(term: number) {
@@ -122,13 +125,22 @@ function zar(n: number) {
 
 const fieldCls = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors';
 
+const BAND_FLOOR: Record<string, number> = {
+	'>3600': 3600, '>4400': 4400, '>6596': 6596,
+	'>8796': 8796, '>13595': 13595, '>17196': 17196,
+};
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ApplicationsPage() {
 	const [batches, setBatches] = useState<Batch[]>([]);
 	const [apps, setApps] = useState<AppListItem[]>([]);
-	const [batchFilter, setBatchFilter] = useState('');
+	const [batchFilter, setBatchFilter] = useState<string | null>(null);
 	const [statusFilter, setStatusFilter] = useState('');
+	const [searchInput, setSearchInput] = useState('');
+	const [search, setSearch] = useState('');
+	const [sortBy, setSortBy] = useState('submitted_at');
+	const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 	const [loading, setLoading] = useState(false);
 	const [page, setPage] = useState(1);
 	const [total, setTotal] = useState(0);
@@ -143,6 +155,22 @@ export default function ApplicationsPage() {
 	const [saveError, setSaveError] = useState('');
 	const [saveSuccess, setSaveSuccess] = useState(false);
 
+	// Debounce search input - reset to page 1 when it fires
+	useEffect(() => {
+		const t = setTimeout(() => { setSearch(searchInput); setPage(1); }, 350);
+		return () => clearTimeout(t);
+	}, [searchInput]);
+
+	function toggleSort(col: string) {
+		if (sortBy === col) {
+			setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+		} else {
+			setSortBy(col);
+			setSortDir('desc');
+		}
+		setPage(1);
+	}
+
 	// Load batches on mount, default to most recent
 	useEffect(() => {
 		api<{ data: Batch[] }>('/m1/batches')
@@ -155,12 +183,16 @@ export default function ApplicationsPage() {
 			.catch(() => {});
 	}, []);
 
-	// Reload applications when filters or page changes
+	// Reload applications when filters, search, sort, or page changes
 	useEffect(() => {
+		if (batchFilter === null) return; // wait until default batch is resolved
 		setLoading(true);
 		const params = new URLSearchParams();
-		if (batchFilter) params.set('batch_id', batchFilter);
+		if (batchFilter) params.set('batch_id', batchFilter as string);
 		if (statusFilter) params.set('status', statusFilter);
+		if (search) params.set('search', search);
+		params.set('sort_by', sortBy);
+		params.set('sort_dir', sortDir);
 		params.set('page', String(page));
 		params.set('page_size', String(PAGE_SIZE));
 
@@ -168,7 +200,7 @@ export default function ApplicationsPage() {
 			.then((r) => { setApps(r.data ?? []); setTotal(r.total ?? 0); })
 			.catch(() => { setApps([]); setTotal(0); })
 			.finally(() => setLoading(false));
-	}, [batchFilter, statusFilter, page]);
+	}, [batchFilter, statusFilter, search, sortBy, sortDir, page]);
 
 	async function openPanel(id: string) {
 		if (selectedId === id) { setSelectedId(null); return; }
@@ -204,7 +236,13 @@ export default function ApplicationsPage() {
 
 			if (app.batch_id) {
 				const catRes = await api<{ data: CatalogueEntry[] }>(`/m1/batches/${app.batch_id}/catalogue`);
-				setCatalogue((catRes.data ?? []).filter((e) => e.is_available));
+				const eligibleIds = app.eligible_model_ids ?? [];
+				setCatalogue(
+					(catRes.data ?? []).filter((e) =>
+						e.is_available &&
+						(eligibleIds.length === 0 || eligibleIds.includes(e.source_model_id))
+					)
+				);
 			}
 		} catch {
 			// panel shows error state
@@ -259,8 +297,28 @@ export default function ApplicationsPage() {
 
 				{/* Filters */}
 				<div className="flex flex-wrap gap-3">
+					<div className="relative">
+						<svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+							<circle cx="11" cy="11" r="8" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35" />
+						</svg>
+						<input
+							type="text"
+							value={searchInput}
+							onChange={(e) => setSearchInput(e.target.value)}
+							placeholder="Search name, reference, store…"
+							className="text-sm border border-gray-300 rounded-lg pl-9 pr-8 py-2 w-64 focus:outline-none focus:ring-2 focus:ring-primary-500"
+						/>
+						{searchInput && (
+							<button
+								onClick={() => { setSearchInput(''); setSearch(''); setPage(1); }}
+								className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+							>
+								×
+							</button>
+						)}
+					</div>
 					<select
-						value={batchFilter}
+						value={batchFilter ?? ''}
 						onChange={(e) => { setBatchFilter(e.target.value); setPage(1); }}
 						className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
 					>
@@ -268,7 +326,7 @@ export default function ApplicationsPage() {
 						{batches.map((b) => (
 							<option key={b.id} value={b.id}>
 								{new Date(b.batch_month).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
-								{' — '}{b.status}
+								{' - '}{b.status}
 							</option>
 						))}
 					</select>
@@ -295,13 +353,13 @@ export default function ApplicationsPage() {
 							<table className="w-full text-sm">
 								<thead>
 									<tr className="border-b border-gray-200 bg-gray-50 text-left">
-										<th className="px-4 py-3 font-medium text-gray-600 whitespace-nowrap">Reference</th>
-										<th className="px-4 py-3 font-medium text-gray-600">Name</th>
+										<SortTh label="Reference" col="reference_number" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+										<SortTh label="Name" col="display_name" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
 										<th className="px-4 py-3 font-medium text-gray-600">Phone</th>
-										<th className="px-4 py-3 font-medium text-gray-600">Term</th>
-										<th className="px-4 py-3 font-medium text-gray-600 hidden xl:table-cell">Place of work</th>
-										<th className="px-4 py-3 font-medium text-gray-600">Status</th>
-										<th className="px-4 py-3 font-medium text-gray-600 whitespace-nowrap hidden md:table-cell">Submitted</th>
+										<SortTh label="Term" col="rental_term" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+										<SortTh label="Place of work" col="place_of_work" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} className="hidden xl:table-cell" />
+										<SortTh label="Status" col="status" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+										<SortTh label="Submitted" col="submitted_at" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} className="hidden md:table-cell" />
 									</tr>
 								</thead>
 								<tbody className="divide-y divide-gray-100">
@@ -318,7 +376,7 @@ export default function ApplicationsPage() {
 													<span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700 font-medium">edited</span>
 												)}
 											</td>
-											<td className="px-4 py-3 text-gray-700 whitespace-nowrap">{app.batch_phone_catalogue?.model_name ?? '—'}</td>
+											<td className="px-4 py-3 text-gray-700 whitespace-nowrap">{app.batch_phone_catalogue?.model_name ?? '-'}</td>
 											<td className="px-4 py-3 text-gray-600">{termLabel(app.rental_term)}</td>
 											<td className="px-4 py-3 text-gray-600 max-w-[180px] truncate hidden xl:table-cell">{app.place_of_work}</td>
 											<td className="px-4 py-3 whitespace-nowrap">
@@ -423,6 +481,8 @@ function DetailPanel({
 	}
 
 	const selectedCat = catalogue.find((c) => c.source_model_id === form.phone_model_id);
+	const salaryFloor = detail.salary_band ? (BAND_FLOOR[detail.salary_band] ?? 0) : 0;
+	const canCash = selectedCat ? salaryFloor >= selectedCat.cash_price * 4 : false;
 
 	return (
 		<div className="bg-white border border-gray-200 rounded-xl overflow-hidden sticky top-4">
@@ -459,9 +519,37 @@ function DetailPanel({
 				<section className="space-y-2">
 					<SectionLabel>Application info</SectionLabel>
 					<ReadRow label="Submitted" value={new Date(detail.submitted_at).toLocaleString('en-ZA')} />
-					<ReadRow label="Employee number" value={detail.employee_number || '—'} mono />
-					<ReadRow label="ID number" value={detail.id_number || '—'} mono />
+					<ReadRow label="Employee number" value={detail.employee_number || '-'} mono />
+					<ReadRow label="ID number" value={detail.id_number || '-'} mono />
+					<ReadRow label="Salary band" value={detail.salary_band ?? (detail.whitelist_found ? 'No salary band set' : 'Not in whitelist')} />
 				</section>
+
+				{/* Eligibility summary */}
+				{detail.salary_band && (
+					<div className={`p-3 rounded-lg text-xs border ${
+						detail.eligible_model_ids.length === 0
+							? 'bg-red-50 border-red-200 text-red-700'
+							: 'bg-blue-50 border-blue-200 text-blue-700'
+					}`}>
+						<span className="font-semibold">Salary eligibility: </span>
+						{detail.eligible_model_ids.length === 0
+							? 'No phone models qualify for this salary band.'
+							: `${detail.eligible_model_ids.length} phone model(s) available. Cash purchase requires salary ≥ R ${((selectedCat?.cash_price ?? 0) * 4).toLocaleString('en-ZA')}.`
+						}
+					</div>
+				)}
+				{!detail.whitelist_found && (
+					<div className="p-3 rounded-lg text-xs border bg-amber-50 border-amber-200 text-amber-700">
+						<span className="font-semibold">Warning: </span>
+						Employee not found in current whitelist - eligibility rules cannot be verified.
+					</div>
+				)}
+				{detail.whitelist_found && !detail.salary_band && (
+					<div className="p-3 rounded-lg text-xs border bg-amber-50 border-amber-200 text-amber-700">
+						<span className="font-semibold">Note: </span>
+						Employee is in the whitelist but has no salary band recorded - not eligible for the phone scheme.
+					</div>
+				)}
 
 				{/* Editable: name + contact */}
 				<section className="space-y-3">
@@ -515,8 +603,8 @@ function DetailPanel({
 							<option value="validated">Validated</option>
 							<option value="converted_to_order">Order placed</option>
 							<option value="cancelled_by_employee">Cancelled</option>
-							<option value="cancelled_no_whitelist">Cancelled — no whitelist match</option>
-							<option value="cancelled_no_stock">Cancelled — out of stock</option>
+							<option value="cancelled_no_whitelist">Cancelled - no whitelist match</option>
+							<option value="cancelled_no_stock">Cancelled - out of stock</option>
 							<option value="rejected">Rejected</option>
 						</select>
 					</Field>
@@ -529,7 +617,7 @@ function DetailPanel({
 						/>
 					</Field>
 
-					{catalogue.length > 0 && (
+					{catalogue.length > 0 ? (
 						<Field label="Phone model">
 							<select
 								value={form.phone_model_id}
@@ -542,31 +630,52 @@ function DetailPanel({
 									</option>
 								))}
 							</select>
+							{detail.salary_band && (
+								<p className="text-xs text-gray-400 mt-1">
+									Filtered to models eligible for <span className="font-medium">{detail.salary_band}</span> salary band.
+								</p>
+							)}
 						</Field>
+					) : (
+						<div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
+							No available phones match this employee's salary band ({detail.salary_band ?? 'unknown'}).
+						</div>
 					)}
 
 					<Field label="Payment term">
 						<div className="flex gap-2">
-							{([0, 7, 13] as const).map((term) => (
-								<button
-									key={term}
-									type="button"
-									onClick={() => onChange({ rental_term: term })}
-									className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
-										form.rental_term === term
-											? 'border-primary-700 bg-primary-50 text-primary-800'
-											: 'border-gray-200 text-gray-600 hover:border-gray-300'
-									}`}
-								>
-									{term === 0 ? 'Cash' : `${term}m`}
-								</button>
-							))}
+							{([0, 7, 13] as const).map((term) => {
+								const cashBlocked = term === 0 && !canCash && !!detail.salary_band;
+								return (
+									<button
+										key={term}
+										type="button"
+										disabled={cashBlocked}
+										onClick={() => !cashBlocked && onChange({ rental_term: term })}
+										title={cashBlocked ? `Cash requires salary ≥ R ${((selectedCat?.cash_price ?? 0) * 4).toLocaleString('en-ZA')}` : undefined}
+										className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+											cashBlocked
+												? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
+												: form.rental_term === term
+												? 'border-primary-700 bg-primary-50 text-primary-800'
+												: 'border-gray-200 text-gray-600 hover:border-gray-300'
+										}`}
+									>
+										{term === 0 ? 'Cash' : `${term}m`}
+									</button>
+								);
+							})}
 						</div>
 						{selectedCat && (
 							<p className="text-xs text-gray-500 mt-1.5">
 								{form.rental_term === 0 && `${zar(selectedCat.cash_price)} deducted once`}
 								{form.rental_term === 7 && `First: ${zar(selectedCat.upfront_amount)}, then ${zar(selectedCat.rental_amount_7m)}/month × 6`}
 								{form.rental_term === 13 && `First: ${zar(selectedCat.upfront_amount)}, then ${zar(selectedCat.rental_amount_13m)}/month × 12`}
+							</p>
+						)}
+						{!canCash && !!detail.salary_band && selectedCat && (
+							<p className="text-xs text-amber-600 mt-1">
+								Cash purchase not available - requires monthly salary ≥ {zar(selectedCat.cash_price * 4)}.
 							</p>
 						)}
 					</Field>
@@ -629,5 +738,25 @@ function ReadRow({ label, value, mono }: { label: string; value: string; mono?: 
 			<span className="text-xs text-gray-500 shrink-0">{label}</span>
 			<span className={`text-xs text-right text-gray-900 ${mono ? 'font-mono' : 'font-medium'}`}>{value}</span>
 		</div>
+	);
+}
+
+function SortTh({ label, col, sortBy, sortDir, onSort, className }: {
+	label: string; col: string; sortBy: string; sortDir: 'asc' | 'desc';
+	onSort: (col: string) => void; className?: string;
+}) {
+	const active = sortBy === col;
+	return (
+		<th
+			onClick={() => onSort(col)}
+			className={`px-4 py-3 font-medium text-gray-600 whitespace-nowrap cursor-pointer select-none hover:text-gray-900 hover:bg-gray-100 transition-colors ${className ?? ''}`}
+		>
+			<span className="inline-flex items-center gap-1">
+				{label}
+				<span className={`text-xs leading-none ${active ? 'text-primary-600' : 'text-gray-300'}`}>
+					{active ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+				</span>
+			</span>
+		</th>
 	);
 }

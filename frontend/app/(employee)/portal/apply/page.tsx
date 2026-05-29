@@ -6,26 +6,15 @@ import { api } from '@/lib/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type StoreCategory =
-	| 'supermarket_mini'
-	| 'liquor'
-	| 'build'
-	| 'distribution_center'
-	| 'meat_factory'
-	| 'head_office';
+interface CategoryRecord {
+	key: string;
+	label: string;
+	is_single_store: boolean;
+	is_active: boolean;
+	display_order: number;
+}
 
-const CATEGORY_LABELS: Record<StoreCategory, string> = {
-	supermarket_mini: 'Boxer Supermarket or Boxer Mini',
-	liquor: 'Boxer Liquor',
-	build: 'Boxer Build',
-	distribution_center: 'Distribution Center',
-	meat_factory: 'Meat Factory',
-	head_office: 'Head Office',
-};
-
-const SINGLE_STORE_CATEGORIES = new Set<StoreCategory>(['meat_factory', 'head_office']);
-
-interface Store { id: string; name: string; category: StoreCategory; }
+interface Store { id: string; name: string; category: string; }
 interface PhoneModel {
 	id: string;
 	model_name: string;
@@ -55,7 +44,7 @@ interface FormState {
 	email: string;
 	employeeNumber: string;
 	idNumber: string;
-	storeCategory: StoreCategory | '';
+	storeCategory: string;
 	storeId: string;
 	phoneModelId: string;
 	rentalTerm: 0 | 7 | 13 | null;
@@ -98,6 +87,7 @@ export default function ApplyPage() {
 	const [step, setStep] = useState(0);
 	const [me, setMe] = useState<Me | null>(null);
 	const [stores, setStores] = useState<Record<string, Store[]>>({});
+	const [categories, setCategories] = useState<CategoryRecord[]>([]);
 	const [phones, setPhones] = useState<PhoneModel[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [submitting, setSubmitting] = useState(false);
@@ -128,6 +118,7 @@ export default function ApplyPage() {
 			api<{ data: Me }>('/auth/me').then((r) => setMe(r.data)),
 			api<{ data: Record<string, Store[]> }>('/m1/stores').then((r) => setStores(r.data ?? {})),
 			api<{ data: PhoneModel[] }>('/m1/phone-models').then((r) => setPhones(r.data ?? [])),
+			api<{ data: CategoryRecord[] }>('/m1/store-categories').then((r) => setCategories(r.data ?? [])),
 		])
 			.catch(() => {})
 			.finally(() => setLoading(false));
@@ -137,10 +128,19 @@ export default function ApplyPage() {
 		setForm((f) => ({ ...f, ...updates }));
 	}
 
+	// Derived from fetched categories
+	const singleStoreKeys = new Set(categories.filter((c) => c.is_single_store).map((c) => c.key));
+	const availableCategories = categories.filter(
+		(c) => c.is_active && (stores[c.key]?.length ?? 0) > 0,
+	);
+	function categoryLabel(key: string): string {
+		return categories.find((c) => c.key === key)?.label ?? key;
+	}
+
 	// Auto-select store for single-store categories
-	function handleCategoryChange(cat: StoreCategory) {
+	function handleCategoryChange(cat: string) {
 		const categoryStores = stores[cat] ?? [];
-		if (SINGLE_STORE_CATEGORIES.has(cat) && categoryStores.length === 1) {
+		if (singleStoreKeys.has(cat) && categoryStores.length === 1) {
 			patch({ storeCategory: cat, storeId: categoryStores[0]!.id });
 		} else {
 			patch({ storeCategory: cat, storeId: '' });
@@ -240,8 +240,10 @@ export default function ApplyPage() {
 			)}
 			{step === 1 && (
 				<Step2
-					stores={stores}
+					availableCategories={availableCategories}
 					categoryStores={categoryStores}
+					categoryLabel={categoryLabel}
+					singleStoreKeys={singleStoreKeys}
 					form={form}
 					onChange={patch}
 					onCategoryChange={handleCategoryChange}
@@ -301,7 +303,7 @@ function Step1({
 		<form onSubmit={handleNext} className="space-y-6">
 			<div>
 				<h2 className="text-xl font-bold">Your details</h2>
-				<p className="text-gray-500 text-sm mt-1">Step 1 of 4 — Confirm your contact number</p>
+				<p className="text-gray-500 text-sm mt-1">Step 1 of 4 - Confirm your contact number</p>
 			</div>
 
 			{me?.display_name && (
@@ -391,22 +393,25 @@ function Step1({
 // ── Step 2: Place of Work ─────────────────────────────────────────────────────
 
 function Step2({
-	stores,
+	availableCategories,
 	categoryStores,
+	categoryLabel,
+	singleStoreKeys,
 	form,
 	onChange,
 	onCategoryChange,
 	onNext,
 }: {
-	stores: Record<string, Store[]>;
+	availableCategories: CategoryRecord[];
 	categoryStores: Store[];
+	categoryLabel: (key: string) => string;
+	singleStoreKeys: Set<string>;
 	form: FormState;
 	onChange: (u: Partial<FormState>) => void;
-	onCategoryChange: (cat: StoreCategory) => void;
+	onCategoryChange: (cat: string) => void;
 	onNext: () => void;
 }) {
-	const categories = Object.keys(stores) as StoreCategory[];
-	const isSingle = form.storeCategory ? SINGLE_STORE_CATEGORIES.has(form.storeCategory as StoreCategory) : false;
+	const isSingle = form.storeCategory ? singleStoreKeys.has(form.storeCategory) : false;
 
 	function handleNext(e: React.FormEvent) {
 		e.preventDefault();
@@ -417,7 +422,7 @@ function Step2({
 		<form onSubmit={handleNext} className="space-y-6">
 			<div>
 				<h2 className="text-xl font-bold">Place of work</h2>
-				<p className="text-gray-500 text-sm mt-1">Step 2 of 4 — Where do you work?</p>
+				<p className="text-gray-500 text-sm mt-1">Step 2 of 4 - Where do you work?</p>
 			</div>
 
 			<div>
@@ -426,14 +431,14 @@ function Step2({
 				</label>
 				<select
 					value={form.storeCategory}
-					onChange={(e) => onCategoryChange(e.target.value as StoreCategory)}
+					onChange={(e) => onCategoryChange(e.target.value)}
 					required
 					className={inputCls(!form.storeCategory && form.storeId !== '')}
 				>
 					<option value="">Select a store type…</option>
-					{categories.map((cat) => (
-						<option key={cat} value={cat}>
-							{CATEGORY_LABELS[cat] ?? cat}
+					{availableCategories.map((cat) => (
+						<option key={cat.key} value={cat.key}>
+							{cat.label}
 						</option>
 					))}
 				</select>
@@ -516,7 +521,7 @@ function Step3({
 		<div className="space-y-6">
 			<div>
 				<h2 className="text-xl font-bold">Choose your phone</h2>
-				<p className="text-gray-500 text-sm mt-1">Step 3 of 4 — Select a phone and payment option</p>
+				<p className="text-gray-500 text-sm mt-1">Step 3 of 4 - Select a phone and payment option</p>
 			</div>
 
 			<div className="space-y-4">
@@ -620,24 +625,24 @@ function Step4({
 }) {
 	const termLabel =
 		form.rentalTerm === 0
-			? `Cash — ${selectedPhone ? zar(selectedPhone.cash_price) : ''} deducted once`
+			? `Cash - ${selectedPhone ? zar(selectedPhone.cash_price) : ''} deducted once`
 			: form.rentalTerm === 7
-			? `7-month rental — First deduction ${selectedPhone ? zar(selectedPhone.upfront_amount) : ''}, then ${selectedPhone ? zar(selectedPhone.rental_amount_7m) : ''}/month × 6`
-			: `13-month rental — First deduction ${selectedPhone ? zar(selectedPhone.upfront_amount) : ''}, then ${selectedPhone ? zar(selectedPhone.rental_amount_13m) : ''}/month × 12`;
+			? `7-month rental - First deduction ${selectedPhone ? zar(selectedPhone.upfront_amount) : ''}, then ${selectedPhone ? zar(selectedPhone.rental_amount_7m) : ''}/month × 6`
+			: `13-month rental - First deduction ${selectedPhone ? zar(selectedPhone.upfront_amount) : ''}, then ${selectedPhone ? zar(selectedPhone.rental_amount_13m) : ''}/month × 12`;
 
 	return (
 		<div className="space-y-6">
 			<div>
 				<h2 className="text-xl font-bold">Review & confirm</h2>
-				<p className="text-gray-500 text-sm mt-1">Step 4 of 4 — Check your details before submitting</p>
+				<p className="text-gray-500 text-sm mt-1">Step 4 of 4 - Check your details before submitting</p>
 			</div>
 
 			<div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
-				<Row label="Name" value={me?.display_name ?? '—'} />
-				<Row label="Employee number" value={form.employeeNumber || '—'} />
+				<Row label="Name" value={me?.display_name ?? '-'} />
+				<Row label="Employee number" value={form.employeeNumber || '-'} />
 				<Row label="Contact number" value={form.contactNumber} />
-				<Row label="Place of work" value={selectedStore?.name ?? '—'} />
-				<Row label="Phone" value={selectedPhone?.model_name ?? '—'} />
+				<Row label="Place of work" value={selectedStore?.name ?? '-'} />
+				<Row label="Phone" value={selectedPhone?.model_name ?? '-'} />
 				<Row label="Payment" value={termLabel} />
 			</div>
 

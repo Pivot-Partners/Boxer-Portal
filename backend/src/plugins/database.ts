@@ -1,10 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
 
 declare module 'fastify' {
   interface FastifyInstance {
-    db: ReturnType<typeof createClient>;
+    db: SupabaseClient;
   }
 }
 

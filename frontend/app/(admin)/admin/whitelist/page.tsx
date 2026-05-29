@@ -59,7 +59,7 @@ export default function WhitelistPage() {
 			);
 			const fileLabel = (res.data?.files ?? 1) > 1 ? `${res.data?.files} files` : '1 file';
 			setUploadSuccess(
-				`Upload complete (${fileLabel}) — ${res.data?.valid_count?.toLocaleString()} valid records (${res.data?.error_count ?? 0} errors).`
+				`Upload complete (${fileLabel}) - ${res.data?.valid_count?.toLocaleString()} valid records (${res.data?.error_count ?? 0} errors).`
 			);
 			await fetchUploads();
 		} catch (err) {
@@ -150,9 +150,9 @@ export default function WhitelistPage() {
 												day: 'numeric', month: 'short', year: 'numeric',
 											})}
 										</td>
-										<td className="px-4 py-3 text-right">{u.record_count?.toLocaleString() ?? '—'}</td>
-										<td className="px-4 py-3 text-right text-green-700">{u.valid_count?.toLocaleString() ?? '—'}</td>
-										<td className="px-4 py-3 text-right text-red-600">{u.error_count || '—'}</td>
+										<td className="px-4 py-3 text-right">{u.record_count?.toLocaleString() ?? '-'}</td>
+										<td className="px-4 py-3 text-right text-green-700">{u.valid_count?.toLocaleString() ?? '-'}</td>
+										<td className="px-4 py-3 text-right text-red-600">{u.error_count || '-'}</td>
 										<td className="px-4 py-3">
 											<span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOUR[u.status] ?? 'bg-gray-100 text-gray-500'}`}>
 												{u.status}

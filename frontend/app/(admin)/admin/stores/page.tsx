@@ -3,17 +3,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, apiUpload } from '@/lib/api';
 
-type StoreCategory =
-	| 'supermarket_mini'
-	| 'liquor'
-	| 'build'
-	| 'distribution_center'
-	| 'meat_factory'
-	| 'head_office';
+interface StoreCategoryRecord {
+	key: string;
+	label: string;
+	is_single_store: boolean;
+	display_order: number;
+	is_active: boolean;
+}
 
 interface Store {
 	id: string;
-	category: StoreCategory;
+	category: string;
 	name: string;
 	store_code: string | null;
 	is_active: boolean;
@@ -21,50 +21,45 @@ interface Store {
 	updated_at: string;
 }
 
-const CATEGORY_LABELS: Record<StoreCategory, string> = {
-	supermarket_mini: 'Supermarket / Mini',
-	liquor: 'Liquor',
-	build: 'Build',
-	distribution_center: 'Distribution Center',
-	meat_factory: 'Meat Factory',
-	head_office: 'Head Office',
-};
-
-const CATEGORIES = Object.keys(CATEGORY_LABELS) as StoreCategory[];
-
 export default function StoresPage() {
 	const [stores, setStores] = useState<Store[]>([]);
+	const [categories, setCategories] = useState<StoreCategoryRecord[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [includeInactive, setIncludeInactive] = useState(false);
-	const [categoryFilter, setCategoryFilter] = useState<StoreCategory | ''>('');
+	const [categoryFilter, setCategoryFilter] = useState('');
 	const [search, setSearch] = useState('');
-
 	const [page, setPage] = useState(1);
 	const PAGE_SIZE = 20;
 
-	const [panel, setPanel] = useState<'add' | 'edit' | 'upload' | null>(null);
+	const [panel, setPanel] = useState<'add' | 'edit' | 'upload' | 'categories' | null>(null);
 	const [editStore, setEditStore] = useState<Store | null>(null);
 
+	function categoryLabel(key: string): string {
+		return categories.find((c) => c.key === key)?.label ?? key;
+	}
+
 	async function loadStores(inactive = includeInactive) {
-		setLoading(true);
-		try {
-			const params = new URLSearchParams();
-			if (inactive) params.set('include_inactive', 'true');
-			const res = await api<{ data: Store[] }>(`/m1/stores/admin?${params}`);
-			setStores(res.data ?? []);
-		} finally {
-			setLoading(false);
-		}
+		const params = new URLSearchParams();
+		if (inactive) params.set('include_inactive', 'true');
+		const res = await api<{ data: Store[] }>(`/m1/stores/admin?${params}`);
+		setStores(res.data ?? []);
+	}
+
+	async function loadCategories() {
+		const res = await api<{ data: StoreCategoryRecord[] }>('/m1/store-categories');
+		setCategories(res.data ?? []);
 	}
 
 	useEffect(() => {
-		loadStores();
+		setLoading(true);
+		Promise.allSettled([loadStores(), loadCategories()]).finally(() => setLoading(false));
 	}, []);
 
 	async function toggleInactive(next: boolean) {
 		setIncludeInactive(next);
 		setPage(1);
-		await loadStores(next);
+		setLoading(true);
+		try { await loadStores(next); } finally { setLoading(false); }
 	}
 
 	function openEdit(store: Store) {
@@ -91,11 +86,12 @@ export default function StoresPage() {
 	const safePage = Math.min(page, totalPages);
 	const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-	// Stats — always computed from active stores regardless of inactive toggle
 	const activeStores = stores.filter((s) => s.is_active);
-	const statsByCategory = CATEGORIES.map((cat) => ({
-		cat,
-		count: activeStores.filter((s) => s.category === cat).length,
+	const activeCategories = categories.filter((c) => c.is_active);
+	const statsByCategory = activeCategories.map((cat) => ({
+		key: cat.key,
+		label: cat.label,
+		count: activeStores.filter((s) => s.category === cat.key).length,
 	}));
 
 	return (
@@ -107,6 +103,12 @@ export default function StoresPage() {
 				</div>
 				<div className="flex gap-2">
 					<button
+						onClick={() => setPanel('categories')}
+						className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+					>
+						Manage categories
+					</button>
+					<button
 						onClick={() => setPanel('upload')}
 						className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
 					>
@@ -114,7 +116,7 @@ export default function StoresPage() {
 					</button>
 					<button
 						onClick={() => setPanel('add')}
-						className="px-3 py-1.5 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors"
+						className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
 					>
 						Add store
 					</button>
@@ -123,18 +125,18 @@ export default function StoresPage() {
 
 			{/* Category stats */}
 			<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-				{statsByCategory.map(({ cat, count }) => (
+				{statsByCategory.map(({ key, label, count }) => (
 					<button
-						key={cat}
-						onClick={() => { setCategoryFilter((prev) => (prev === cat ? '' : cat)); setPage(1); }}
+						key={key}
+						onClick={() => { setCategoryFilter((prev) => (prev === key ? '' : key)); setPage(1); }}
 						className={`rounded-xl border p-3 text-left transition-colors ${
-							categoryFilter === cat
-								? 'border-gray-900 bg-gray-900 text-white'
+							categoryFilter === key
+								? 'border-primary-600 bg-primary-600 text-white'
 								: 'border-gray-200 bg-white hover:border-gray-300'
 						}`}
 					>
-						<p className={`text-xs font-medium truncate ${categoryFilter === cat ? 'text-gray-300' : 'text-gray-500'}`}>
-							{CATEGORY_LABELS[cat]}
+						<p className={`text-xs font-medium truncate ${categoryFilter === key ? 'text-white/80' : 'text-gray-500'}`}>
+							{label}
 						</p>
 						<p className="text-xl font-bold mt-0.5">{count}</p>
 					</button>
@@ -145,12 +147,12 @@ export default function StoresPage() {
 			<div className="flex flex-wrap gap-3 items-center">
 				<select
 					value={categoryFilter}
-					onChange={(e) => { setCategoryFilter(e.target.value as StoreCategory | ''); setPage(1); }}
+					onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
 					className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white"
 				>
 					<option value="">All categories</option>
-					{CATEGORIES.map((cat) => (
-						<option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
+					{activeCategories.map((cat) => (
+						<option key={cat.key} value={cat.key}>{cat.label}</option>
 					))}
 				</select>
 
@@ -195,6 +197,7 @@ export default function StoresPage() {
 								<StoreRow
 									key={store.id}
 									store={store}
+									categoryLabel={categoryLabel}
 									onEdit={openEdit}
 									onToggle={async () => {
 										await api(`/m1/stores/${store.id}`, {
@@ -225,9 +228,7 @@ export default function StoresPage() {
 						>
 							←
 						</button>
-						<span className="px-2">
-							Page {safePage} of {totalPages}
-						</span>
+						<span className="px-2">Page {safePage} of {totalPages}</span>
 						<button
 							disabled={safePage === totalPages}
 							onClick={() => setPage((p) => p + 1)}
@@ -242,31 +243,35 @@ export default function StoresPage() {
 			{/* Panels */}
 			{panel === 'add' && (
 				<AddStorePanel
+					categories={categories}
 					onClose={closePanel}
-					onSaved={async () => {
-						closePanel();
-						await loadStores();
-					}}
+					onSaved={async () => { closePanel(); await loadStores(); }}
 				/>
 			)}
 
 			{panel === 'edit' && editStore && (
 				<EditStorePanel
 					store={editStore}
+					categories={categories}
 					onClose={closePanel}
-					onSaved={async () => {
-						closePanel();
-						await loadStores();
-					}}
+					onSaved={async () => { closePanel(); await loadStores(); }}
 				/>
 			)}
 
 			{panel === 'upload' && (
 				<UploadPanel
+					categories={categories}
+					onClose={closePanel}
+					onSaved={async () => { closePanel(); await loadStores(); }}
+				/>
+			)}
+
+			{panel === 'categories' && (
+				<CategoriesPanel
+					categories={categories}
 					onClose={closePanel}
 					onSaved={async () => {
-						closePanel();
-						await loadStores();
+						await loadCategories();
 					}}
 				/>
 			)}
@@ -276,10 +281,12 @@ export default function StoresPage() {
 
 function StoreRow({
 	store,
+	categoryLabel,
 	onEdit,
 	onToggle,
 }: {
 	store: Store;
+	categoryLabel: (key: string) => string;
 	onEdit: (s: Store) => void;
 	onToggle: () => Promise<void>;
 }) {
@@ -288,9 +295,9 @@ function StoreRow({
 	return (
 		<tr className={`hover:bg-gray-50 transition-colors ${!store.is_active ? 'opacity-50' : ''}`}>
 			<td className="px-4 py-3 font-medium">{store.name}</td>
-			<td className="px-4 py-3 text-gray-500">{CATEGORY_LABELS[store.category]}</td>
+			<td className="px-4 py-3 text-gray-500">{categoryLabel(store.category)}</td>
 			<td className="px-4 py-3 text-gray-500 hidden sm:table-cell font-mono text-xs">
-				{store.store_code ?? <span className="text-gray-300">—</span>}
+				{store.store_code ?? <span className="text-gray-300">-</span>}
 			</td>
 			<td className="px-4 py-3">
 				<span
@@ -325,9 +332,18 @@ function StoreRow({
 	);
 }
 
-function AddStorePanel({ onClose, onSaved }: { onClose: () => void; onSaved: () => Promise<void> }) {
+function AddStorePanel({
+	categories,
+	onClose,
+	onSaved,
+}: {
+	categories: StoreCategoryRecord[];
+	onClose: () => void;
+	onSaved: () => Promise<void>;
+}) {
+	const activeCategories = categories.filter((c) => c.is_active);
 	const [name, setName] = useState('');
-	const [category, setCategory] = useState<StoreCategory>('supermarket_mini');
+	const [category, setCategory] = useState<string>(activeCategories[0]?.key ?? '');
 	const [storeCode, setStoreCode] = useState('');
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState('');
@@ -358,11 +374,11 @@ function AddStorePanel({ onClose, onSaved }: { onClose: () => void; onSaved: () 
 				<Field label="Category">
 					<select
 						value={category}
-						onChange={(e) => setCategory(e.target.value as StoreCategory)}
+						onChange={(e) => setCategory(e.target.value)}
 						className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
 					>
-						{CATEGORIES.map((cat) => (
-							<option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
+						{activeCategories.map((cat) => (
+							<option key={cat.key} value={cat.key}>{cat.label}</option>
 						))}
 					</select>
 				</Field>
@@ -398,8 +414,8 @@ function AddStorePanel({ onClose, onSaved }: { onClose: () => void; onSaved: () 
 				<div className="flex gap-3 pt-2">
 					<button
 						type="submit"
-						disabled={saving}
-						className="flex-1 bg-gray-900 text-white text-sm rounded-lg py-2 hover:bg-gray-700 disabled:opacity-50 transition-colors"
+						disabled={saving || !category}
+						className="flex-1 bg-primary-600 text-white text-sm rounded-lg py-2 hover:bg-primary-700 disabled:opacity-50 transition-colors"
 					>
 						{saving ? 'Saving…' : 'Add store'}
 					</button>
@@ -414,15 +430,18 @@ function AddStorePanel({ onClose, onSaved }: { onClose: () => void; onSaved: () 
 
 function EditStorePanel({
 	store,
+	categories,
 	onClose,
 	onSaved,
 }: {
 	store: Store;
+	categories: StoreCategoryRecord[];
 	onClose: () => void;
 	onSaved: () => Promise<void>;
 }) {
+	const activeCategories = categories.filter((c) => c.is_active);
 	const [name, setName] = useState(store.name);
-	const [category, setCategory] = useState<StoreCategory>(store.category);
+	const [category, setCategory] = useState<string>(store.category);
 	const [storeCode, setStoreCode] = useState(store.store_code ?? '');
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState('');
@@ -454,12 +473,16 @@ function EditStorePanel({
 				<Field label="Category">
 					<select
 						value={category}
-						onChange={(e) => setCategory(e.target.value as StoreCategory)}
+						onChange={(e) => setCategory(e.target.value)}
 						className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
 					>
-						{CATEGORIES.map((cat) => (
-							<option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
+						{activeCategories.map((cat) => (
+							<option key={cat.key} value={cat.key}>{cat.label}</option>
 						))}
+						{/* Include the current category even if inactive, so the select renders correctly */}
+						{!activeCategories.find((c) => c.key === store.category) && (
+							<option value={store.category}>{store.category} (inactive)</option>
+						)}
 					</select>
 				</Field>
 
@@ -488,7 +511,7 @@ function EditStorePanel({
 					<button
 						type="submit"
 						disabled={saving}
-						className="flex-1 bg-gray-900 text-white text-sm rounded-lg py-2 hover:bg-gray-700 disabled:opacity-50 transition-colors"
+						className="flex-1 bg-primary-600 text-white text-sm rounded-lg py-2 hover:bg-primary-700 disabled:opacity-50 transition-colors"
 					>
 						{saving ? 'Saving…' : 'Save changes'}
 					</button>
@@ -501,10 +524,18 @@ function EditStorePanel({
 	);
 }
 
-function UploadPanel({ onClose, onSaved }: { onClose: () => void; onSaved: () => Promise<void> }) {
+function UploadPanel({
+	categories,
+	onClose,
+	onSaved,
+}: {
+	categories: StoreCategoryRecord[];
+	onClose: () => void;
+	onSaved: () => Promise<void>;
+}) {
 	const fileRef = useRef<HTMLInputElement>(null);
 	const [file, setFile] = useState<File | null>(null);
-	const [csvCategory, setCsvCategory] = useState<StoreCategory | ''>('');
+	const [csvCategory, setCsvCategory] = useState('');
 	const [uploading, setUploading] = useState(false);
 	const [error, setError] = useState('');
 	const [result, setResult] = useState<{
@@ -512,6 +543,7 @@ function UploadPanel({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 		inserted: number;
 		reactivated: number;
 		skipped: number;
+		unrecognized_categories: string[];
 	} | null>(null);
 
 	const isExcel = file?.name.toLowerCase().endsWith('.xlsx') || file?.name.toLowerCase().endsWith('.xls');
@@ -530,7 +562,9 @@ function UploadPanel({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 			formData.append('file', file);
 
 			const qs = isCsv && csvCategory ? `?category=${encodeURIComponent(csvCategory)}` : '';
-			const res = await apiUpload<{ data: { parsed: number; inserted: number; reactivated: number; skipped: number } }>(`/m1/stores/upload${qs}`, formData);
+			const res = await apiUpload<{
+				data: { parsed: number; inserted: number; reactivated: number; skipped: number; unrecognized_categories: string[] };
+			}>(`/m1/stores/upload${qs}`, formData);
 			setResult(res.data!);
 		} catch (err: any) {
 			setError(err.message ?? 'Upload failed');
@@ -546,11 +580,11 @@ function UploadPanel({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 					<p className="font-medium text-gray-700">Supported formats</p>
 					<p>
 						<span className="font-mono text-xs bg-white border border-gray-200 rounded px-1">.xlsx</span>{' '}
-						— one sheet per category (sheet name = category label)
+						- one sheet per category (sheet name = category label or key)
 					</p>
 					<p>
 						<span className="font-mono text-xs bg-white border border-gray-200 rounded px-1">.csv</span>{' '}
-						— single column <span className="font-mono text-xs">Store name</span>, select category below
+						- single column <span className="font-mono text-xs">Store name</span>, select category below
 					</p>
 					<p className="text-xs text-gray-400 pt-1">Existing active stores are skipped. Inactive stores are reactivated. No stores are ever deleted automatically.</p>
 				</div>
@@ -587,12 +621,12 @@ function UploadPanel({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 						<Field label="Category (CSV files only)">
 							<select
 								value={csvCategory}
-								onChange={(e) => setCsvCategory(e.target.value as StoreCategory | '')}
+								onChange={(e) => setCsvCategory(e.target.value)}
 								className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
 							>
 								<option value="">Select category…</option>
-								{CATEGORIES.map((cat) => (
-									<option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
+								{categories.filter((c) => c.is_active).map((cat) => (
+									<option key={cat.key} value={cat.key}>{cat.label}</option>
 								))}
 							</select>
 							<p className="text-xs text-gray-400 mt-1">
@@ -604,14 +638,29 @@ function UploadPanel({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 					{error && <p className="text-sm text-red-600">{error}</p>}
 
 					{result && (
-						<div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-1 text-sm">
-							<p className="font-semibold text-green-800">Upload complete</p>
-							<div className="grid grid-cols-2 gap-x-4 gap-y-1 text-green-700 mt-2">
-								<span>Rows parsed</span><span className="font-mono font-semibold">{result.parsed}</span>
-								<span>Inserted</span><span className="font-mono font-semibold">{result.inserted}</span>
-								<span>Reactivated</span><span className="font-mono font-semibold">{result.reactivated}</span>
-								<span>Skipped (already active)</span><span className="font-mono font-semibold">{result.skipped}</span>
+						<div className="space-y-2">
+							<div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-1 text-sm">
+								<p className="font-semibold text-green-800">Upload complete</p>
+								<div className="grid grid-cols-2 gap-x-4 gap-y-1 text-green-700 mt-2">
+									<span>Rows parsed</span><span className="font-mono font-semibold">{result.parsed}</span>
+									<span>Inserted</span><span className="font-mono font-semibold">{result.inserted}</span>
+									<span>Reactivated</span><span className="font-mono font-semibold">{result.reactivated}</span>
+									<span>Skipped (already active)</span><span className="font-mono font-semibold">{result.skipped}</span>
+								</div>
 							</div>
+							{result.unrecognized_categories.length > 0 && (
+								<div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+									<p className="font-medium text-amber-800 mb-1">Unrecognized categories — rows skipped</p>
+									<ul className="space-y-0.5">
+										{result.unrecognized_categories.map((c) => (
+											<li key={c} className="font-mono text-xs text-amber-700">{c}</li>
+										))}
+									</ul>
+									<p className="text-xs text-amber-600 mt-2">
+										Add these as categories first, then re-upload.
+									</p>
+								</div>
+							)}
 						</div>
 					)}
 
@@ -621,7 +670,7 @@ function UploadPanel({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 								<button
 									type="submit"
 									disabled={uploading || !file}
-									className="flex-1 bg-gray-900 text-white text-sm rounded-lg py-2 hover:bg-gray-700 disabled:opacity-50 transition-colors"
+									className="flex-1 bg-primary-600 text-white text-sm rounded-lg py-2 hover:bg-primary-700 disabled:opacity-50 transition-colors"
 								>
 									{uploading ? 'Uploading…' : 'Upload'}
 								</button>
@@ -633,7 +682,7 @@ function UploadPanel({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 							<button
 								type="button"
 								onClick={onSaved}
-								className="flex-1 bg-gray-900 text-white text-sm rounded-lg py-2 hover:bg-gray-700 transition-colors"
+								className="flex-1 bg-primary-600 text-white text-sm rounded-lg py-2 hover:bg-primary-700 transition-colors"
 							>
 								Done
 							</button>
@@ -642,6 +691,297 @@ function UploadPanel({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 				</form>
 			</div>
 		</SlidePanel>
+	);
+}
+
+function CategoriesPanel({
+	categories,
+	onClose,
+	onSaved,
+}: {
+	categories: StoreCategoryRecord[];
+	onClose: () => void;
+	onSaved: () => Promise<void>;
+}) {
+	const [editingKey, setEditingKey] = useState<string | null>(null);
+	const [showAdd, setShowAdd] = useState(false);
+
+	return (
+		<SlidePanel title="Manage categories" onClose={onClose}>
+			<div className="space-y-5">
+				<p className="text-sm text-gray-500">
+					Categories group stores in the employee application form. A category key is permanent once set — only the label and settings can be changed.
+				</p>
+
+				<div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100">
+					{categories.map((cat) =>
+						editingKey === cat.key ? (
+							<CategoryEditRow
+								key={cat.key}
+								cat={cat}
+								onSaved={async () => { setEditingKey(null); await onSaved(); }}
+								onCancel={() => setEditingKey(null)}
+							/>
+						) : (
+							<CategoryRow
+								key={cat.key}
+								cat={cat}
+								onEdit={() => { setEditingKey(cat.key); setShowAdd(false); }}
+							/>
+						)
+					)}
+					{categories.length === 0 && (
+						<div className="px-4 py-6 text-center text-sm text-gray-400">No categories yet</div>
+					)}
+				</div>
+
+				{showAdd ? (
+					<AddCategoryForm
+						onSaved={async () => { setShowAdd(false); await onSaved(); }}
+						onCancel={() => setShowAdd(false)}
+					/>
+				) : (
+					<button
+						onClick={() => { setShowAdd(true); setEditingKey(null); }}
+						className="w-full py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-primary-400 hover:text-primary-600 transition-colors"
+					>
+						+ Add category
+					</button>
+				)}
+			</div>
+		</SlidePanel>
+	);
+}
+
+function CategoryRow({
+	cat,
+	onEdit,
+}: {
+	cat: StoreCategoryRecord;
+	onEdit: () => void;
+}) {
+	return (
+		<div className="px-4 py-3 flex items-center gap-3">
+			<div className="flex-1 min-w-0">
+				<p className="text-sm font-medium truncate">{cat.label}</p>
+				<p className="text-xs text-gray-400 font-mono mt-0.5">{cat.key}</p>
+			</div>
+			<div className="flex items-center gap-1.5 shrink-0">
+				{cat.is_single_store && (
+					<span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5">
+						Single store
+					</span>
+				)}
+				<span className={`text-xs rounded-full px-2 py-0.5 border ${
+					cat.is_active
+						? 'bg-green-50 text-green-700 border-green-200'
+						: 'bg-gray-50 text-gray-500 border-gray-200'
+				}`}>
+					{cat.is_active ? 'Active' : 'Inactive'}
+				</span>
+				<button
+					onClick={onEdit}
+					className="text-xs text-gray-500 hover:text-gray-900 underline ml-1"
+				>
+					Edit
+				</button>
+			</div>
+		</div>
+	);
+}
+
+function CategoryEditRow({
+	cat,
+	onSaved,
+	onCancel,
+}: {
+	cat: StoreCategoryRecord;
+	onSaved: () => Promise<void>;
+	onCancel: () => void;
+}) {
+	const [label, setLabel] = useState(cat.label);
+	const [isSingleStore, setIsSingleStore] = useState(cat.is_single_store);
+	const [displayOrder, setDisplayOrder] = useState(cat.display_order);
+	const [isActive, setIsActive] = useState(cat.is_active);
+	const [saving, setSaving] = useState(false);
+	const [error, setError] = useState('');
+
+	async function submit(e: React.FormEvent) {
+		e.preventDefault();
+		setSaving(true);
+		setError('');
+		try {
+			await api(`/m1/store-categories/${cat.key}`, {
+				method: 'PATCH',
+				body: { label: label.trim(), is_single_store: isSingleStore, display_order: displayOrder, is_active: isActive },
+			});
+			await onSaved();
+		} catch (err: any) {
+			setError(err.message ?? 'Failed to update category');
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	return (
+		<form onSubmit={submit} className="px-4 py-3 bg-gray-50 space-y-3">
+			<div className="flex items-center gap-2 text-xs text-gray-500">
+				<span className="font-mono bg-white border border-gray-200 rounded px-1.5 py-0.5">{cat.key}</span>
+				<span className="text-gray-400">key is permanent</span>
+			</div>
+
+			<Field label="Label">
+				<input
+					type="text"
+					required
+					value={label}
+					onChange={(e) => setLabel(e.target.value)}
+					className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+				/>
+			</Field>
+
+			<Field label="Display order">
+				<input
+					type="number"
+					value={displayOrder}
+					min={1}
+					onChange={(e) => setDisplayOrder(parseInt(e.target.value, 10) || 1)}
+					className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+				/>
+			</Field>
+
+			<div className="flex gap-6">
+				<label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+					<input
+						type="checkbox"
+						checked={isSingleStore}
+						onChange={(e) => setIsSingleStore(e.target.checked)}
+						className="rounded"
+					/>
+					Single store
+				</label>
+				<label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+					<input
+						type="checkbox"
+						checked={isActive}
+						onChange={(e) => setIsActive(e.target.checked)}
+						className="rounded"
+					/>
+					Active
+				</label>
+			</div>
+
+			{error && <p className="text-sm text-red-600">{error}</p>}
+
+			<div className="flex gap-2">
+				<button
+					type="submit"
+					disabled={saving}
+					className="flex-1 bg-primary-600 text-white text-sm rounded-lg py-1.5 hover:bg-primary-700 disabled:opacity-50 transition-colors"
+				>
+					{saving ? 'Saving…' : 'Save'}
+				</button>
+				<button
+					type="button"
+					onClick={onCancel}
+					className="flex-1 border border-gray-300 text-sm rounded-lg py-1.5 hover:bg-gray-50 transition-colors"
+				>
+					Cancel
+				</button>
+			</div>
+		</form>
+	);
+}
+
+function AddCategoryForm({
+	onSaved,
+	onCancel,
+}: {
+	onSaved: () => Promise<void>;
+	onCancel: () => void;
+}) {
+	const [key, setKey] = useState('');
+	const [label, setLabel] = useState('');
+	const [isSingleStore, setIsSingleStore] = useState(false);
+	const [saving, setSaving] = useState(false);
+	const [error, setError] = useState('');
+
+	async function submit(e: React.FormEvent) {
+		e.preventDefault();
+		setSaving(true);
+		setError('');
+		try {
+			await api('/m1/store-categories', {
+				method: 'POST',
+				body: { key: key.trim(), label: label.trim(), is_single_store: isSingleStore },
+			});
+			await onSaved();
+		} catch (err: any) {
+			setError(err.message ?? 'Failed to create category');
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	return (
+		<div className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50">
+			<p className="text-sm font-semibold text-gray-700">New category</p>
+			<form onSubmit={submit} className="space-y-3">
+				<Field label="Key (permanent identifier)">
+					<input
+						type="text"
+						required
+						value={key}
+						onChange={(e) => setKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+						className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm font-mono"
+						placeholder="e.g. fuel_station"
+					/>
+					<p className="text-xs text-gray-400 mt-1">
+						Lowercase letters, numbers, underscores only. Cannot be changed later.
+					</p>
+				</Field>
+
+				<Field label="Label (shown to employees)">
+					<input
+						type="text"
+						required
+						value={label}
+						onChange={(e) => setLabel(e.target.value)}
+						className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+						placeholder="e.g. Fuel Station"
+					/>
+				</Field>
+
+				<label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+					<input
+						type="checkbox"
+						checked={isSingleStore}
+						onChange={(e) => setIsSingleStore(e.target.checked)}
+						className="rounded"
+					/>
+					Single store (auto-selects when employee picks this category)
+				</label>
+
+				{error && <p className="text-sm text-red-600">{error}</p>}
+
+				<div className="flex gap-2">
+					<button
+						type="submit"
+						disabled={saving || !key || !label}
+						className="flex-1 bg-primary-600 text-white text-sm rounded-lg py-1.5 hover:bg-primary-700 disabled:opacity-50 transition-colors"
+					>
+						{saving ? 'Creating…' : 'Create category'}
+					</button>
+					<button
+						type="button"
+						onClick={onCancel}
+						className="flex-1 border border-gray-300 text-sm rounded-lg py-1.5 hover:bg-gray-50 transition-colors"
+					>
+						Cancel
+					</button>
+				</div>
+			</form>
+		</div>
 	);
 }
 

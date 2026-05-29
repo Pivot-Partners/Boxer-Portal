@@ -52,6 +52,12 @@ function generateReference(month: Date): string {
 	return `${prefix}-${suffix}`;
 }
 
+const BAND_ORDER = ['>3600', '>4400', '>6596', '>8796', '>13595', '>17196'] as const;
+const BAND_FLOOR: Record<string, number> = {
+	'>3600': 3600, '>4400': 4400, '>6596': 6596,
+	'>8796': 8796, '>13595': 13595, '>17196': 17196,
+};
+
 const applicationsRoute: FastifyPluginAsync = async (fastify) => {
 	// Employee submits application
 	fastify.post('/m1/applications', {
@@ -331,22 +337,30 @@ const applicationsRoute: FastifyPluginAsync = async (fastify) => {
 	fastify.get('/m1/applications', {
 		preHandler: fastify.requireRole('m1_admin', 'super_admin'),
 	}, async (request, reply) => {
-		const { batch_id, status, page: pageStr, page_size: pageSizeStr } = request.query as { batch_id?: string; status?: string; page?: string; page_size?: string };
+		const { batch_id, status, page: pageStr, page_size: pageSizeStr, search, sort_by, sort_dir } = request.query as { batch_id?: string; status?: string; page?: string; page_size?: string; search?: string; sort_by?: string; sort_dir?: string };
 
 		const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
 		const pageSize = Math.min(200, Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50));
 		const from = (page - 1) * pageSize;
 		const to = from + pageSize - 1;
 
+		const SORTABLE = ['submitted_at', 'reference_number', 'display_name', 'place_of_work', 'status', 'rental_term'];
+		const sortCol = SORTABLE.includes(sort_by ?? '') ? sort_by! : 'submitted_at';
+		const ascending = sort_dir === 'asc';
+
 		let query = fastify.db
 			.from('applications')
 			.select('id, reference_number, first_name, last_name, display_name, place_of_work, rental_term, status, batch_id, submitted_at, admin_edited_at, admin_editor_name, batch_phone_catalogue(model_name)', { count: 'exact' })
 			.not('status', 'in', '("superseded")')
-			.order('submitted_at', { ascending: false })
+			.order(sortCol, { ascending })
 			.range(from, to);
 
 		if (batch_id) query = query.eq('batch_id', batch_id);
 		if (status) query = query.eq('status', status);
+		if (search?.trim()) {
+			const term = search.trim();
+			query = query.or(`reference_number.ilike.%${term}%,display_name.ilike.%${term}%,first_name.ilike.%${term}%,last_name.ilike.%${term}%,place_of_work.ilike.%${term}%`);
+		}
 
 		const { data, error, count } = await query;
 		if (error) return reply.code(500).send({ success: false, error: 'Failed to fetch applications', details: error.message });
@@ -362,12 +376,48 @@ const applicationsRoute: FastifyPluginAsync = async (fastify) => {
 
 		const { data, error } = await fastify.db
 			.from('applications')
-			.select('id, reference_number, first_name, last_name, display_name, place_of_work, contact_number, email, phone_model_id, batch_catalogue_id, rental_term, status, batch_id, submitted_at, employee_number_encrypted, id_number_encrypted, admin_edited_at, admin_editor_name, admin_edit_notes, batch_phone_catalogue(id, model_name, cash_price, upfront_amount, rental_amount_7m, rental_amount_13m)')
+			.select('id, reference_number, first_name, last_name, display_name, place_of_work, contact_number, email, phone_model_id, batch_catalogue_id, rental_term, status, batch_id, submitted_at, employee_number_hash, employee_number_encrypted, id_number_encrypted, admin_edited_at, admin_editor_name, admin_edit_notes, batch_phone_catalogue(id, model_name, cash_price, upfront_amount, rental_amount_7m, rental_amount_13m)')
 			.eq('id', id)
 			.single();
 
 		if (error || !data) {
 			return reply.code(404).send({ success: false, error: 'Application not found' });
+		}
+
+		// Look up salary band and compute eligible phone model IDs.
+		// Use limit(1) array form — maybeSingle() returns null on multiple rows
+		// (e.g. if is_current flip had a race) which would silently fail the lookup.
+		let salary_band: string | null = null;
+		let eligible_model_ids: string[] = [];
+		let whitelist_found = false;
+
+		const { data: wlRows } = await fastify.db
+			.from('whitelist_records')
+			.select('salary_band')
+			.eq('employee_number_hash', (data as any).employee_number_hash)
+			.eq('is_current', true)
+			.limit(1);
+
+		const wlRecord = wlRows?.[0] ?? null;
+		whitelist_found = wlRecord !== null;
+
+		if (wlRecord) {
+			salary_band = wlRecord.salary_band ?? null;
+			if (salary_band) {
+				const empBandIdx = BAND_ORDER.indexOf(salary_band as typeof BAND_ORDER[number]);
+				if (empBandIdx >= 0) {
+					const { data: phoneModels } = await fastify.db
+						.from('phone_models')
+						.select('id, min_salary_band')
+						.eq('is_active', true);
+					eligible_model_ids = (phoneModels ?? [])
+						.filter((m: any) => {
+							const phoneBandIdx = BAND_ORDER.indexOf(m.min_salary_band);
+							return phoneBandIdx >= 0 && empBandIdx >= phoneBandIdx;
+						})
+						.map((m: any) => m.id);
+				}
+			}
 		}
 
 		const result = {
@@ -376,6 +426,10 @@ const applicationsRoute: FastifyPluginAsync = async (fastify) => {
 			id_number: safeDecrypt((data as any).id_number_encrypted),
 			employee_number_encrypted: undefined,
 			id_number_encrypted: undefined,
+			employee_number_hash: undefined,
+			salary_band,
+			eligible_model_ids,
+			whitelist_found,
 		};
 
 		return reply.send({ success: true, data: result });
@@ -406,12 +460,54 @@ const applicationsRoute: FastifyPluginAsync = async (fastify) => {
 
 		const { data: existing, error: fetchError } = await fastify.db
 			.from('applications')
-			.select('id, batch_id')
+			.select('id, batch_id, employee_number_hash, phone_model_id')
 			.eq('id', id)
 			.single();
 
 		if (fetchError || !existing) {
 			return reply.code(404).send({ success: false, error: 'Application not found' });
+		}
+
+		// Enforce salary eligibility when changing phone model or switching to cash term
+		if (body.data.phone_model_id !== undefined || body.data.rental_term === 0) {
+			const { data: wlRecord } = await fastify.db
+				.from('whitelist_records')
+				.select('salary_band')
+				.eq('employee_number_hash', (existing as any).employee_number_hash)
+				.eq('is_current', true)
+				.maybeSingle();
+
+			if (wlRecord?.salary_band) {
+				const empBandIdx = BAND_ORDER.indexOf(wlRecord.salary_band as typeof BAND_ORDER[number]);
+				const salaryFloor = BAND_FLOOR[wlRecord.salary_band] ?? 0;
+				const phoneModelId = body.data.phone_model_id ?? (existing as any).phone_model_id;
+
+				if (phoneModelId) {
+					const { data: pm } = await fastify.db
+						.from('phone_models')
+						.select('min_salary_band, cash_price')
+						.eq('id', phoneModelId)
+						.single();
+
+					if (pm) {
+						if (body.data.phone_model_id !== undefined) {
+							const phoneBandIdx = BAND_ORDER.indexOf((pm as any).min_salary_band);
+							if (phoneBandIdx === -1 || empBandIdx < phoneBandIdx) {
+								return reply.code(400).send({
+									success: false,
+									error: 'This employee does not meet the salary requirement for this phone model',
+								});
+							}
+						}
+						if (body.data.rental_term === 0 && salaryFloor < (pm as any).cash_price * 4) {
+							return reply.code(400).send({
+								success: false,
+								error: "Employee's salary does not qualify for the cash purchase option (25% rule)",
+							});
+						}
+					}
+				}
+			}
 		}
 
 		const editorName = (payload as any).full_name ?? (payload as any).display_name ?? 'Admin';

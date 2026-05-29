@@ -70,7 +70,14 @@ Apply all migrations **in order**, one at a time. Each migration must succeed be
 2. Enables Row Level Security on the 11 tables that migration 001 missed — **required before going live**
 3. The backend uses `service_role` which bypasses RLS, so nothing breaks
 
-> **If you see a `permission denied` error** from the API after applying migrations, paste and run just the three `GRANT` lines from the bottom of `001_initial_schema.sql`.
+**Migration 006 — Store categories (dynamic)**
+1. Click **New query**, paste `scripts/migrations/006_store_categories.sql`, click **Run**
+2. Creates the `store_categories` table and seeds the 6 default categories (Supermarket/Mini, Liquor, Build, Distribution Center, Meat Factory, Head Office)
+3. Drops the old hardcoded `stores_category_check` constraint on the `stores` table
+4. Includes its own `GRANT ALL ON TABLE store_categories` — no separate permission step needed for this table
+5. Verify: click **Table Editor** → open `store_categories` — you should see 6 rows
+
+> **If you see a `permission denied` error** from the API after applying migrations, ensure all migrations were run in order (001–006). Migration 001's `GRANT ALL ON ALL TABLES` only covers tables that existed at that moment — each later migration that adds a new table includes its own `GRANT`. If the error persists for a specific table, paste and run the `GRANT` lines from the bottom of that table's migration file.
 
 > **If a migration fails partway through**, click **Table Editor**, check what was and wasn't created, fix the cause (usually a typo or partial paste), and re-run only that migration.
 
@@ -203,7 +210,7 @@ Inserted 200 / 584
 Done — 584 stores seeded.
 ```
 
-If you see a file-not-found error, the CSV files in `E:\Work\boxer\docs\` are missing. The seed script reads from that path. Confirm the four CSV files are there:
+If you see a file-not-found error, the CSV files in `supporting docs/docs/` (at the repo root) are missing. The seed script reads from that path. Confirm the four CSV files are there:
 - `Boxer store list 2 Dec 2025 - Supermarkets and Minis.csv`
 - `Boxer store list 2 Dec 2025 - Liquor.csv`
 - `Boxer store list 2 Dec 2025 - Build.csv`
@@ -303,76 +310,83 @@ If you get "Employee number or ID number not recognised": the whitelist upload m
 
 ---
 
-## Part 5 — Deploy Backend to Railway
+## Part 5 — Deploy Backend to Render
 
-### 5.1 Create a Railway account
+> **Free tier note:** Render's free tier spins the service down after 15 minutes of inactivity. The first request after a period of inactivity can take 30–50 seconds to respond — this is expected behaviour on the free plan.
 
-1. Go to [railway.app](https://railway.app)
-2. Click **Login** → **Login with GitHub**
-3. Authorise Railway to access your GitHub account
+### 5.1 Create a Render account
 
-### 5.2 Create a new project
+1. Go to [render.com](https://render.com)
+2. Click **Get Started** → **Continue with GitHub**
+3. Authorise Render to access your GitHub account
 
-1. On the Railway dashboard, click **New Project**
-2. Click **Deploy from GitHub repo**
-3. If prompted, click **Configure GitHub App** and grant Railway access to the `boxer-portal` repository
-4. Select the `boxer-portal` repository from the list
-5. Railway will show a service being created — click on it to configure it
+### 5.2 Create a new Web Service
+
+1. On the Render dashboard, click **New** → **Web Service**
+2. Click **Connect a repository**
+3. If prompted, click **Configure account** and grant Render access to the `boxer-portal` repository
+4. Find `boxer-portal` in the list and click **Connect**
 
 ### 5.3 Configure the service
 
-1. Click the service card → click **Settings**
-2. Under **Source**, find **Root directory** → set it to `backend`
-3. Railway will now only deploy from the `backend/` folder
-4. Under **Deploy**, find **Start command** → set it to `node dist/server.js`
-5. Under **Build**, find **Build command** → set it to `npm run build`
+On the configuration screen, set:
+
+| Field | Value |
+|-------|-------|
+| **Name** | `boxer-portal-backend-staging` |
+| **Region** | Frankfurt (EU Central) |
+| **Branch** | `main` |
+| **Root Directory** | `backend` |
+| **Runtime** | Node |
+| **Build Command** | `cd .. && npm install && cd backend && npm run build` |
+| **Start Command** | `node dist/backend/src/server.js` |
+| **Instance Type** | Free |
 
 ### 5.4 Add environment variables
 
-1. Click the **Variables** tab on the service
-2. Click **Raw Editor** (easier for pasting many variables at once)
-3. Paste all variables from your `backend/.env` file, but change these three:
+Scroll down to **Environment Variables** on the same configuration screen. Add each variable from your `backend/.env` file one at a time (or use the **Add from .env** button if shown), with these values changed for staging:
 
 ```
 NODE_ENV=staging
 FRONTEND_URL=https://boxer-portal-staging.vercel.app
-API_BASE_URL=https://your-railway-url.up.railway.app
+API_BASE_URL=https://boxer-portal-backend-staging.onrender.com
 ```
 
-(You won't know the Railway URL until the first deploy — set it after the first deploy succeeds)
+> Render assigns the URL based on the service name you chose. If you used a different name in step 5.3, your URL will be `https://<your-service-name>.onrender.com`. You can confirm it under **Settings** → **Custom Domains** after the service is created.
 
-4. Click **Update Variables**
+### 5.5 Deploy
 
-### 5.5 Add a domain
-
-1. Click the **Settings** tab → scroll to **Networking**
-2. Click **Generate Domain** — Railway assigns a URL like `boxer-portal-backend-staging.up.railway.app`
-3. Copy this URL — you will need it for the frontend env var and for the `API_BASE_URL` variable
-
-### 5.6 Deploy
-
-1. Railway triggers a deploy automatically when you save settings
-2. Click the **Deployments** tab to watch the build log
+1. Click **Create Web Service** at the bottom of the page
+2. Render triggers the first build automatically — click **Logs** to watch it
 3. A successful deploy ends with your server-listening log message
-4. If the build fails, the log will show the error — most common issues are missing env vars or a TypeScript compile error
+4. If the build fails, the log shows the error — most common issues are missing env vars or a TypeScript compile error
 
-### 5.7 Run seeds on Railway
+### 5.6 Run seeds via Render Shell
 
-After the first successful deploy, run the seed scripts against the deployed backend:
+After the first successful deploy, seed the database using the Shell tab:
+
+1. Open the service on the Render dashboard
+2. Click the **Shell** tab at the top
+3. Wait a moment for the shell to connect (may take 10–15 seconds)
+4. Run:
 
 ```bash
-# Install the Railway CLI
-npm install -g @railway/cli
+npm run seed:admin
+npm run seed:stores
+```
 
-# Log in
-railway login
+Expected output for seed:admin:
+```
+Super admin created: admin@yourcompany.co.za
+Change the password on first login.
+```
 
-# Link to your project (run from the boxer-portal root directory)
-railway link
-
-# Run seeds
-railway run -s backend npx tsx scripts/seed-admin.ts
-railway run -s backend npx tsx scripts/seed-stores.ts
+Expected output for seed:stores:
+```
+Seeding stores...
+Inserted 100 / 584
+...
+Done — 584 stores seeded.
 ```
 
 ---
@@ -400,10 +414,10 @@ Before clicking Deploy, expand **Environment Variables** and add:
 
 | Name | Value |
 |------|-------|
-| `NEXT_PUBLIC_API_BASE_URL` | `https://your-railway-url.up.railway.app/v1` |
+| `NEXT_PUBLIC_API_BASE_URL` | `https://boxer-portal-backend-staging.onrender.com/v1` |
 | `NEXT_PUBLIC_ENV` | `staging` |
 
-Replace `your-railway-url` with the actual Railway domain from step 5.5.
+Replace the Render URL with your actual service URL from step 5.5 if it differs.
 
 ### 6.4 Deploy
 
@@ -411,11 +425,11 @@ Replace `your-railway-url` with the actual Railway domain from step 5.5.
 2. Vercel builds and deploys — takes about 1 minute
 3. You get a URL like `https://boxer-portal-staging.vercel.app`
 
-### 6.5 Update Railway CORS
+### 6.5 Update backend CORS
 
-1. Go back to Railway → your backend service → **Variables**
+1. Go back to Render → your backend service → **Environment**
 2. Update `FRONTEND_URL` to your actual Vercel URL (e.g. `https://boxer-portal-staging.vercel.app`)
-3. Railway redeploys automatically
+3. Click **Save Changes** — Render redeploys automatically
 
 ### 6.6 Staging smoke test
 
@@ -423,7 +437,7 @@ Repeat the checklist from Part 4 using the Vercel URL instead of localhost. Addi
 
 - [ ] Admin login works on the live URL
 - [ ] In the browser, open DevTools → Application → Cookies → confirm `token` cookie has `HttpOnly` and `Secure` flags checked
-- [ ] Employee login works (expect it to be slow on first attempt — up to 30 seconds on a cold Railway instance)
+- [ ] Employee login works (expect it to be slow on first attempt — up to 30–50 seconds if the free tier instance has spun down)
 - [ ] No CORS errors in the browser Console tab during any API call
 
 ---
@@ -436,7 +450,7 @@ Repeat Parts 1–6 with these changes:
 |---------|--------------|-----------------|
 | Supabase project name | `boxer-portal-staging` | `boxer-portal-production` |
 | Supabase region | Frankfurt | Frankfurt (same until POPIA sign-off) |
-| Railway service name | `backend-staging` | `backend-production` |
+| Render service name | `boxer-portal-backend-staging` | `boxer-portal-backend-production` |
 | `NODE_ENV` | `staging` | `production` |
 | `SUPER_ADMIN_EMAIL` | test email | real operations email |
 | `SUPER_ADMIN_INITIAL_PASSWORD` | any strong password | strong password (change on first login) |
