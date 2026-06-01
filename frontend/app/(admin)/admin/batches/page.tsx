@@ -96,7 +96,10 @@ export default function BatchesPage() {
 		const res = await api<{ data: Batch[] }>('/m1/batches');
 		const list = res.data ?? [];
 		setBatches(list);
-		if (!selectedBatch && list.length > 0) {
+		if (selectedBatch) {
+			const updated = list.find((b) => b.id === selectedBatch.id);
+			if (updated) setSelectedBatch(updated);
+		} else if (list.length > 0) {
 			setSelectedBatch(list.find((b) => b.status === 'open') ?? list[0]!);
 		}
 	}
@@ -152,7 +155,7 @@ export default function BatchesPage() {
 		setApproveError('');
 		try {
 			await api(`/m1/batches/${selectedBatch.id}/approve`, { method: 'POST' });
-			await fetchBatches();
+			await Promise.all([fetchBatches(), fetchApplications(selectedBatch.id)]);
 		} catch (err) {
 			setApproveError(err instanceof Error ? err.message : 'Approval failed');
 		} finally {
@@ -230,7 +233,7 @@ export default function BatchesPage() {
 				{!hasOpenBatch && (
 					<button
 						onClick={() => setOpenForm(!openForm)}
-						className="shrink-0 px-4 py-2 bg-primary-700 hover:bg-primary-800 text-white text-sm font-medium rounded-lg transition-colors"
+						className="shrink-0 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium rounded-lg transition-colors"
 					>
 						Open new batch
 					</button>
@@ -249,7 +252,7 @@ export default function BatchesPage() {
 								value={newMonth}
 								onChange={(e) => setNewMonth(e.target.value)}
 								required
-								className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+								className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
 							/>
 						</div>
 						<div>
@@ -259,7 +262,7 @@ export default function BatchesPage() {
 								value={newCutoff}
 								onChange={(e) => setNewCutoff(e.target.value)}
 								required
-								className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+								className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
 							/>
 						</div>
 					</div>
@@ -268,7 +271,7 @@ export default function BatchesPage() {
 						<button
 							type="submit"
 							disabled={opening}
-							className="px-4 py-2 bg-primary-700 hover:bg-primary-800 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
+							className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
 						>
 							{opening ? 'Opening…' : 'Open batch'}
 						</button>
@@ -296,7 +299,7 @@ export default function BatchesPage() {
 								onClick={() => setSelectedBatch(b)}
 								className={`w-full text-left p-4 rounded-xl border transition-colors ${
 									selectedBatch?.id === b.id
-										? 'border-primary-500 bg-primary-50'
+										? 'border-slate-500 bg-slate-50'
 										: 'border-gray-200 bg-white hover:border-gray-300'
 								}`}
 							>
@@ -365,13 +368,13 @@ export default function BatchesPage() {
 								</div>
 							)}
 
-							{EXPORTABLE_STATUSES.has(selectedBatch.status) && (
+							{EXPORTABLE_STATUSES.has(selectedBatch.status) && (selectedBatch.total_applications ?? 0) > 0 && (
 								<div className="mt-4 pt-4 border-t border-gray-100">
 									<a
 										href={`${process.env.NEXT_PUBLIC_API_BASE_URL}/m1/batches/${selectedBatch.id}/export`}
 										target="_blank"
 										rel="noopener noreferrer"
-										className="inline-flex items-center gap-2 px-5 py-2 bg-primary-700 hover:bg-primary-800 text-white text-sm font-semibold rounded-lg transition-colors"
+										className="inline-flex items-center gap-2 px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-lg transition-colors"
 									>
 										Download HR Export (.xlsx)
 									</a>

@@ -123,7 +123,7 @@ function zar(n: number) {
 	return `R ${n.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`;
 }
 
-const fieldCls = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors';
+const fieldCls = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-colors';
 
 const BAND_FLOOR: Record<string, number> = {
 	'>3600': 3600, '>4400': 4400, '>6596': 6596,
@@ -306,7 +306,7 @@ export default function ApplicationsPage() {
 							value={searchInput}
 							onChange={(e) => setSearchInput(e.target.value)}
 							placeholder="Search name, reference, store…"
-							className="text-sm border border-gray-300 rounded-lg pl-9 pr-8 py-2 w-64 focus:outline-none focus:ring-2 focus:ring-primary-500"
+							className="text-sm border border-gray-300 rounded-lg pl-9 pr-8 py-2 w-64 focus:outline-none focus:ring-2 focus:ring-slate-500"
 						/>
 						{searchInput && (
 							<button
@@ -320,7 +320,7 @@ export default function ApplicationsPage() {
 					<select
 						value={batchFilter ?? ''}
 						onChange={(e) => { setBatchFilter(e.target.value); setPage(1); }}
-						className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+						className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-500"
 					>
 						<option value="">All batches</option>
 						{batches.map((b) => (
@@ -333,7 +333,7 @@ export default function ApplicationsPage() {
 					<select
 						value={statusFilter}
 						onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-						className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+						className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-500"
 					>
 						<option value="">All statuses</option>
 						{FILTER_STATUSES.map((s) => (
@@ -367,7 +367,7 @@ export default function ApplicationsPage() {
 										<tr
 											key={app.id}
 											onClick={() => openPanel(app.id)}
-											className={`cursor-pointer transition-colors hover:bg-gray-50 ${selectedId === app.id ? 'bg-primary-50' : ''}`}
+											className={`cursor-pointer transition-colors hover:bg-gray-50 ${selectedId === app.id ? 'bg-slate-50' : ''}`}
 										>
 											<td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">{app.reference_number}</td>
 											<td className="px-4 py-3">
@@ -475,7 +475,7 @@ function DetailPanel({
 		return (
 			<div className="bg-white border border-gray-200 rounded-xl p-5 text-sm text-gray-500 space-y-3">
 				<p>Could not load application details.</p>
-				<button onClick={onClose} className="text-primary-700 hover:text-primary-800 font-medium">← Back to list</button>
+				<button onClick={onClose} className="text-slate-800 hover:text-slate-900 font-medium">← Back to list</button>
 			</div>
 		);
 	}
@@ -657,7 +657,7 @@ function DetailPanel({
 											cashBlocked
 												? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
 												: form.rental_term === term
-												? 'border-primary-700 bg-primary-50 text-primary-800'
+												? 'border-slate-800 bg-slate-50 text-slate-900'
 												: 'border-gray-200 text-gray-600 hover:border-gray-300'
 										}`}
 									>
@@ -708,9 +708,16 @@ function DetailPanel({
 				<button
 					onClick={onSave}
 					disabled={saving}
-					className="w-full py-2.5 bg-primary-700 hover:bg-primary-800 text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+					className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
 				>
 					{saving ? 'Saving…' : 'Save changes'}
+				</button>
+				<button
+					onClick={onClose}
+					disabled={saving}
+					className="w-full py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-600 font-semibold rounded-xl text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+				>
+					Cancel
 				</button>
 			</div>
 		</div>
@@ -753,7 +760,7 @@ function SortTh({ label, col, sortBy, sortDir, onSort, className }: {
 		>
 			<span className="inline-flex items-center gap-1">
 				{label}
-				<span className={`text-xs leading-none ${active ? 'text-primary-600' : 'text-gray-300'}`}>
+				<span className={`text-xs leading-none ${active ? 'text-slate-700' : 'text-gray-300'}`}>
 					{active ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
 				</span>
 			</span>

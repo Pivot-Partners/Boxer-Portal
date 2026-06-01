@@ -76,6 +76,7 @@ const whitelistRoute: FastifyPluginAsync = async (fastify) => {
 
 		// Flip is_current exactly once — after all files parsed, before inserting new records
 		await fastify.db.from('whitelist_records').update({ is_current: false }).eq('is_current', true);
+		await fastify.db.from('whitelist_uploads').update({ status: 'superseded' }).eq('status', 'active');
 
 		const { data: phoneModels } = await fastify.db
 			.from('phone_models')

@@ -40,7 +40,7 @@ function zar(n: number) {
 	return `R ${Number(n).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`;
 }
 
-const fieldCls = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent';
+const fieldCls = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent';
 
 export default function PhonesPage() {
 	const [models, setModels] = useState<PhoneModel[]>([]);
@@ -150,7 +150,7 @@ export default function PhonesPage() {
 				</div>
 				<button
 					onClick={() => { setShowAdd((v) => !v); setAddError(''); }}
-					className="shrink-0 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors"
+					className="shrink-0 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg transition-colors"
 				>
 					{showAdd ? 'Cancel' : '+ Add phone model'}
 				</button>
@@ -240,7 +240,7 @@ export default function PhonesPage() {
 						<button
 							type="submit"
 							disabled={adding}
-							className="px-5 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50 transition-colors"
+							className="px-5 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg disabled:opacity-50 transition-colors"
 						>
 							{adding ? 'Adding…' : 'Add phone model'}
 						</button>
@@ -307,7 +307,7 @@ export default function PhonesPage() {
 									<button
 										onClick={saveEdit}
 										disabled={saving}
-										className="px-4 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm rounded-lg disabled:opacity-50 transition-colors font-semibold"
+										className="px-4 py-1.5 bg-slate-700 hover:bg-slate-800 text-white text-sm rounded-lg disabled:opacity-50 transition-colors font-semibold"
 									>
 										{saving ? 'Saving…' : 'Save prices'}
 									</button>
@@ -346,7 +346,7 @@ export default function PhonesPage() {
 								<div className="flex items-center gap-3 shrink-0">
 									<button
 										onClick={() => startEdit(model)}
-										className="text-xs text-primary-600 hover:text-primary-700 font-semibold"
+										className="text-xs text-slate-700 hover:text-slate-800 font-semibold"
 									>
 										Edit prices
 									</button>

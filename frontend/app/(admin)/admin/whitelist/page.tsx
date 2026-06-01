@@ -83,7 +83,7 @@ export default function WhitelistPage() {
 
 				<label
 					className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-8 cursor-pointer transition-colors ${
-						uploading ? 'border-gray-200 bg-gray-50 cursor-not-allowed' : 'border-gray-300 hover:border-primary-400 hover:bg-primary-50'
+						uploading ? 'border-gray-200 bg-gray-50 cursor-not-allowed' : 'border-gray-300 hover:border-slate-400 hover:bg-slate-50'
 					}`}
 				>
 					<input

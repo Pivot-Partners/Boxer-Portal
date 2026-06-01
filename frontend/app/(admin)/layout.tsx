@@ -110,7 +110,7 @@ function SidebarInner({
 							onClick={onClose}
 							className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
 								active
-									? 'bg-primary-600 text-white shadow-sm'
+									? 'bg-slate-700 text-white shadow-sm'
 									: 'text-gray-400 hover:text-white hover:bg-white/10'
 							}`}
 						>
@@ -205,7 +205,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 					</div>
 				</header>
 
-				<main className="flex-1 px-4 sm:px-8 py-6 sm:py-8 max-w-7xl w-full mx-auto">
+				<main className="flex-1 px-4 sm:px-8 py-6 sm:py-8 w-full">
 					{children}
 				</main>
 			</div>

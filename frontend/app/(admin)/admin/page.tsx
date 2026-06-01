@@ -44,7 +44,7 @@ const QUICK_ACTIONS = [
 		title: 'Upload HR Whitelist',
 		desc: 'Refresh the eligible employee list from HR CSV files',
 		icon: (
-			<svg className="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+			<svg className="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
 				<path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
 			</svg>
 		),
@@ -54,7 +54,7 @@ const QUICK_ACTIONS = [
 		title: 'Manage Batches',
 		desc: 'Open a new batch or approve the current batch for processing',
 		icon: (
-			<svg className="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+			<svg className="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
 				<path strokeLinecap="round" strokeLinejoin="round" d="M12 2L2 7l10 5 10-5-10-5z" />
 				<path strokeLinecap="round" strokeLinejoin="round" d="M2 17l10 5 10-5M2 12l10 5 10-5" />
 			</svg>
@@ -65,7 +65,7 @@ const QUICK_ACTIONS = [
 		title: 'Phone Catalogue',
 		desc: 'Manage available phone models, pricing, and availability',
 		icon: (
-			<svg className="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+			<svg className="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
 				<rect x="5" y="2" width="14" height="20" rx="2" />
 				<path strokeLinecap="round" d="M12 18h.01" />
 			</svg>
@@ -76,7 +76,7 @@ const QUICK_ACTIONS = [
 		title: 'View Applications',
 		desc: 'Review, filter, and edit employee applications',
 		icon: (
-			<svg className="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+			<svg className="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
 				<path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
 				<path strokeLinecap="round" d="M9 12h6M9 16h4" />
 			</svg>
@@ -225,7 +225,7 @@ function StatCard({
 			className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-gray-300 transition-all block group"
 		>
 			<p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{label}</p>
-			<p className="text-2xl font-bold text-gray-900 mt-1.5 group-hover:text-primary-600 transition-colors">
+			<p className="text-2xl font-bold text-gray-900 mt-1.5 group-hover:text-slate-700 transition-colors">
 				{value}
 			</p>
 			{sub && <div className="mt-2 text-sm text-gray-500">{sub}</div>}
@@ -247,10 +247,10 @@ function ActionCard({
 	return (
 		<Link
 			href={href}
-			className="bg-white border border-gray-200 shadow-sm rounded-xl p-4 hover:border-primary-300 hover:shadow-md transition-all block group"
+			className="bg-white border border-gray-200 shadow-sm rounded-xl p-4 hover:border-slate-300 hover:shadow-md transition-all block group"
 		>
 			<div className="flex items-start gap-3">
-				<div className="shrink-0 w-9 h-9 rounded-lg bg-primary-50 flex items-center justify-center mt-0.5">
+				<div className="shrink-0 w-9 h-9 rounded-lg bg-slate-50 flex items-center justify-center mt-0.5">
 					{icon}
 				</div>
 				<div className="min-w-0">
@@ -258,7 +258,7 @@ function ActionCard({
 					<p className="text-gray-500 text-xs mt-0.5 leading-relaxed">{desc}</p>
 				</div>
 				<svg
-					className="w-4 h-4 text-gray-300 group-hover:text-primary-500 shrink-0 mt-1 transition-colors"
+					className="w-4 h-4 text-gray-300 group-hover:text-slate-500 shrink-0 mt-1 transition-colors ml-auto"
 					fill="none"
 					stroke="currentColor"
 					strokeWidth={2}

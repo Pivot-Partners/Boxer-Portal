@@ -324,6 +324,7 @@ function Step1({
 					value={form.contactNumber}
 					onChange={(e) => onChange({ contactNumber: e.target.value })}
 					required
+					maxLength={15}
 					placeholder="e.g. 082 000 0000"
 					className={inputCls()}
 				/>

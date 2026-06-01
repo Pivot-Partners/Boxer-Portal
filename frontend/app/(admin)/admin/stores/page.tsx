@@ -116,7 +116,7 @@ export default function StoresPage() {
 					</button>
 					<button
 						onClick={() => setPanel('add')}
-						className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+						className="px-3 py-1.5 text-sm bg-slate-700 text-white rounded-lg hover:bg-slate-800 transition-colors"
 					>
 						Add store
 					</button>
@@ -131,7 +131,7 @@ export default function StoresPage() {
 						onClick={() => { setCategoryFilter((prev) => (prev === key ? '' : key)); setPage(1); }}
 						className={`rounded-xl border p-3 text-left transition-colors ${
 							categoryFilter === key
-								? 'border-primary-600 bg-primary-600 text-white'
+								? 'border-slate-700 bg-slate-700 text-white'
 								: 'border-gray-200 bg-white hover:border-gray-300'
 						}`}
 					>
@@ -415,7 +415,7 @@ function AddStorePanel({
 					<button
 						type="submit"
 						disabled={saving || !category}
-						className="flex-1 bg-primary-600 text-white text-sm rounded-lg py-2 hover:bg-primary-700 disabled:opacity-50 transition-colors"
+						className="flex-1 bg-slate-700 text-white text-sm rounded-lg py-2 hover:bg-slate-800 disabled:opacity-50 transition-colors"
 					>
 						{saving ? 'Saving…' : 'Add store'}
 					</button>
@@ -511,7 +511,7 @@ function EditStorePanel({
 					<button
 						type="submit"
 						disabled={saving}
-						className="flex-1 bg-primary-600 text-white text-sm rounded-lg py-2 hover:bg-primary-700 disabled:opacity-50 transition-colors"
+						className="flex-1 bg-slate-700 text-white text-sm rounded-lg py-2 hover:bg-slate-800 disabled:opacity-50 transition-colors"
 					>
 						{saving ? 'Saving…' : 'Save changes'}
 					</button>
@@ -670,7 +670,7 @@ function UploadPanel({
 								<button
 									type="submit"
 									disabled={uploading || !file}
-									className="flex-1 bg-primary-600 text-white text-sm rounded-lg py-2 hover:bg-primary-700 disabled:opacity-50 transition-colors"
+									className="flex-1 bg-slate-700 text-white text-sm rounded-lg py-2 hover:bg-slate-800 disabled:opacity-50 transition-colors"
 								>
 									{uploading ? 'Uploading…' : 'Upload'}
 								</button>
@@ -682,7 +682,7 @@ function UploadPanel({
 							<button
 								type="button"
 								onClick={onSaved}
-								className="flex-1 bg-primary-600 text-white text-sm rounded-lg py-2 hover:bg-primary-700 transition-colors"
+								className="flex-1 bg-slate-700 text-white text-sm rounded-lg py-2 hover:bg-slate-800 transition-colors"
 							>
 								Done
 							</button>
@@ -743,7 +743,7 @@ function CategoriesPanel({
 				) : (
 					<button
 						onClick={() => { setShowAdd(true); setEditingKey(null); }}
-						className="w-full py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-primary-400 hover:text-primary-600 transition-colors"
+						className="w-full py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-slate-400 hover:text-slate-700 transition-colors"
 					>
 						+ Add category
 					</button>
@@ -877,7 +877,7 @@ function CategoryEditRow({
 				<button
 					type="submit"
 					disabled={saving}
-					className="flex-1 bg-primary-600 text-white text-sm rounded-lg py-1.5 hover:bg-primary-700 disabled:opacity-50 transition-colors"
+					className="flex-1 bg-slate-700 text-white text-sm rounded-lg py-1.5 hover:bg-slate-800 disabled:opacity-50 transition-colors"
 				>
 					{saving ? 'Saving…' : 'Save'}
 				</button>
@@ -968,7 +968,7 @@ function AddCategoryForm({
 					<button
 						type="submit"
 						disabled={saving || !key || !label}
-						className="flex-1 bg-primary-600 text-white text-sm rounded-lg py-1.5 hover:bg-primary-700 disabled:opacity-50 transition-colors"
+						className="flex-1 bg-slate-700 text-white text-sm rounded-lg py-1.5 hover:bg-slate-800 disabled:opacity-50 transition-colors"
 					>
 						{saving ? 'Creating…' : 'Create category'}
 					</button>
