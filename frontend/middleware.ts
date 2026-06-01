@@ -47,8 +47,11 @@ export async function middleware(request: NextRequest) {
 	if (!payload || isExpired(payload)) {
 		if (refreshToken) {
 			const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3001/v1';
+			const baseUrl = base.startsWith('http')
+				? base
+				: `${request.nextUrl.protocol}//${request.nextUrl.host}${base}`;
 			try {
-				const res = await fetch(`${base}/auth/refresh`, {
+				const res = await fetch(`${baseUrl}/auth/refresh`, {
 					method: 'POST',
 					headers: { Cookie: `refresh_token=${refreshToken}` },
 				});
