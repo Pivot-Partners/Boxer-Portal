@@ -20,6 +20,7 @@ const employeeAuthRoute: FastifyPluginAsync = async (fastify) => {
 
 		const { employee_number, id_number } = body.data;
 		const empHash = hmacHash(employee_number);
+		const crossOrigin = process.env.NODE_ENV !== 'development';
 
 		// Single indexed lookup — O(1) instead of full-table bcrypt scan
 		const { data: whitelistRecord } = await fastify.db
@@ -56,8 +57,8 @@ const employeeAuthRoute: FastifyPluginAsync = async (fastify) => {
 
 			reply.setCookie('token', token, {
 				httpOnly: true,
-				sameSite: 'strict',
-				secure: process.env.NODE_ENV === 'production',
+				sameSite: crossOrigin ? 'none' : 'strict',
+				secure: crossOrigin,
 				path: '/',
 				maxAge: 4 * 60 * 60,
 			});
@@ -106,8 +107,8 @@ const employeeAuthRoute: FastifyPluginAsync = async (fastify) => {
 
 			reply.setCookie('token', token, {
 				httpOnly: true,
-				sameSite: 'strict',
-				secure: process.env.NODE_ENV === 'production',
+				sameSite: crossOrigin ? 'none' : 'strict',
+				secure: crossOrigin,
 				path: '/',
 				maxAge: 8 * 60 * 60,
 			});

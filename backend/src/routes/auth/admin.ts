@@ -75,18 +75,19 @@ const adminAuthRoute: FastifyPluginAsync = async (fastify) => {
       last_login_at: new Date().toISOString(),
     }).eq('id', user.id);
 
+    const crossOrigin = process.env.NODE_ENV !== 'development';
     reply
       .setCookie('token', token, {
         httpOnly: true,
-        sameSite: 'strict',
-        secure: process.env.NODE_ENV === 'production',
+        sameSite: crossOrigin ? 'none' : 'strict',
+        secure: crossOrigin,
         path: '/',
         maxAge: 15 * 60,
       })
       .setCookie('refresh_token', refreshToken, {
         httpOnly: true,
-        sameSite: 'strict',
-        secure: process.env.NODE_ENV === 'production',
+        sameSite: crossOrigin ? 'none' : 'strict',
+        secure: crossOrigin,
         path: '/',
         maxAge: 7 * 24 * 60 * 60,
       });

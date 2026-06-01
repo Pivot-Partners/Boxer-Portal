@@ -336,11 +336,13 @@ On the configuration screen, set:
 | **Name** | `boxer-portal-backend-staging` |
 | **Region** | Frankfurt (EU Central) |
 | **Branch** | `main` |
-| **Root Directory** | `backend` |
+| **Root Directory** | *(leave blank)* |
 | **Runtime** | Node |
-| **Build Command** | `cd .. && npm install && cd backend && npm run build` |
-| **Start Command** | `node dist/backend/src/server.js` |
+| **Build Command** | `npm install && npm run build --workspace=backend` |
+| **Start Command** | `node backend/dist/backend/src/server.js` |
 | **Instance Type** | Free |
+
+> **Why Root Directory is blank:** The repo uses npm workspaces (`frontend`, `backend`, `shared`). Running `npm install` from the repo root is the only way to correctly hoist all dependencies to `node_modules/`. Setting Root Directory to `backend` causes npm to detect the workspace but install to the wrong location, making TypeScript unable to resolve packages.
 
 ### 5.4 Add environment variables
 
@@ -361,14 +363,20 @@ API_BASE_URL=https://boxer-portal-backend-staging.onrender.com
 3. A successful deploy ends with your server-listening log message
 4. If the build fails, the log shows the error — most common issues are missing env vars or a TypeScript compile error
 
-### 5.6 Run seeds via Render Shell
+### 5.6 Seed the database (run locally against staging Supabase)
 
-After the first successful deploy, seed the database using the Shell tab:
+The seed scripts connect directly to Supabase — they don't go through the deployed backend. Run them locally by temporarily pointing your local `.env` at the staging database.
 
-1. Open the service on the Render dashboard
-2. Click the **Shell** tab at the top
-3. Wait a moment for the shell to connect (may take 10–15 seconds)
-4. Run:
+1. Open `backend/.env` and swap these two values to the **staging** credentials from step 1.6:
+
+```
+SUPABASE_URL=https://your-staging-ref.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...staging-service-role-key...
+```
+
+Keep all other values as-is (JWT secrets, encryption key, etc. don't matter for seeding).
+
+2. Open a terminal in the `backend/` folder and run:
 
 ```bash
 npm run seed:admin
@@ -388,6 +396,10 @@ Inserted 100 / 584
 ...
 Done — 584 stores seeded.
 ```
+
+3. Once both seeds succeed, **restore `backend/.env`** to your local Supabase credentials so local development still works.
+
+> `seed:stores` reads the CSV files from `supporting docs/docs/` on your local machine — confirm those files are present before running.
 
 ---
 
