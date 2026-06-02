@@ -9,6 +9,7 @@ interface Batch {
 	batch_month: string;
 	cutoff_at: string;
 	status: string;
+	created_at: string;
 }
 
 interface Application {
@@ -59,6 +60,7 @@ const STATUS_LABEL: Record<string, { text: string; colour: string }> = {
 	validated: { text: 'Approved', colour: 'bg-green-100 text-green-800' },
 	converted_to_order: { text: 'Order placed', colour: 'bg-blue-100 text-blue-800' },
 	cancelled_by_employee: { text: 'Cancelled by you', colour: 'bg-gray-100 text-gray-600' },
+	cancelled_by_admin: { text: 'Cancelled by admin', colour: 'bg-gray-100 text-gray-600' },
 	cancelled_no_whitelist: { text: 'Cancelled - eligibility issue', colour: 'bg-red-100 text-red-700' },
 	cancelled_no_stock: { text: 'Cancelled - out of stock', colour: 'bg-red-100 text-red-700' },
 	rejected: { text: 'Rejected', colour: 'bg-red-100 text-red-700' },
@@ -217,11 +219,20 @@ export default function PortalPage() {
 							</span>
 						</div>
 
-						<p className="text-xs text-gray-400 border-t border-gray-100 pt-3">
-							Reference: <span className="font-mono">{application.reference_number}</span>
-							{' · '}
-							Submitted {new Date(application.submitted_at).toLocaleDateString('en-ZA')}
-						</p>
+						<div className="border-t border-gray-100 pt-3 space-y-1">
+							<p className="text-xs text-gray-400">
+								Reference: <span className="font-mono">{application.reference_number}</span>
+								{' · '}
+								Submitted {new Date(application.submitted_at).toLocaleDateString('en-ZA')}
+							</p>
+							{batch && (
+								<p className="text-xs text-gray-400">
+									Batch open: {new Date(batch.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })}
+									{' · '}
+									Closes: {new Date(batch.cutoff_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })}
+								</p>
+							)}
+						</div>
 
 						{application.status === 'pending' && isOpen && !editing && (
 							<div className="flex flex-wrap items-center gap-4 pt-1">

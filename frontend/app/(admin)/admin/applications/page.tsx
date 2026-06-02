@@ -90,6 +90,7 @@ const STATUS_COLOUR: Record<string, string> = {
 	validated: 'bg-green-100 text-green-800',
 	converted_to_order: 'bg-blue-100 text-blue-800',
 	cancelled_by_employee: 'bg-gray-100 text-gray-600',
+	cancelled_by_admin: 'bg-gray-100 text-gray-600',
 	cancelled_no_whitelist: 'bg-red-100 text-red-700',
 	cancelled_no_stock: 'bg-red-100 text-red-700',
 	rejected: 'bg-red-100 text-red-700',
@@ -100,6 +101,7 @@ const STATUS_LABEL: Record<string, string> = {
 	validated: 'Validated',
 	converted_to_order: 'Order placed',
 	cancelled_by_employee: 'Cancelled by employee',
+	cancelled_by_admin: 'Cancelled by admin',
 	cancelled_no_whitelist: 'No whitelist match',
 	cancelled_no_stock: 'Out of stock',
 	rejected: 'Rejected',
@@ -602,7 +604,8 @@ function DetailPanel({
 							<option value="pending">Pending</option>
 							<option value="validated">Validated</option>
 							<option value="converted_to_order">Order placed</option>
-							<option value="cancelled_by_employee">Cancelled</option>
+							<option value="cancelled_by_employee">Cancelled by employee</option>
+							<option value="cancelled_by_admin">Cancelled by admin</option>
 							<option value="cancelled_no_whitelist">Cancelled - no whitelist match</option>
 							<option value="cancelled_no_stock">Cancelled - out of stock</option>
 							<option value="rejected">Rejected</option>

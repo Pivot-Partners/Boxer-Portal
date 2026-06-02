@@ -450,7 +450,7 @@ const applicationsRoute: FastifyPluginAsync = async (fastify) => {
 			place_of_work: z.string().optional(),
 			phone_model_id: z.string().uuid().optional(),
 			rental_term: z.union([z.literal(7), z.literal(13), z.literal(0)]).optional(),
-			status: z.enum(['pending', 'validated', 'converted_to_order', 'cancelled_by_employee', 'cancelled_no_whitelist', 'cancelled_no_stock', 'rejected']).optional(),
+			status: z.enum(['pending', 'validated', 'converted_to_order', 'cancelled_by_employee', 'cancelled_by_admin', 'cancelled_no_whitelist', 'cancelled_no_stock', 'rejected']).optional(),
 			admin_edit_notes: z.string().optional(),
 		}).safeParse(request.body);
 

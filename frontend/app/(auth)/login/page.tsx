@@ -159,7 +159,7 @@ export default function LoginPage() {
 									<SubmitBtn loading={loading} label="Sign In" />
 								</div>
 								<p className="text-xs text-gray-400 text-center">
-									Your details are verified against the HR whitelist.
+									Your details are validated against what HR has on record.
 								</p>
 							</form>
 						) : (

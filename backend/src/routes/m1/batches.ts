@@ -6,7 +6,7 @@ const batchRoute: FastifyPluginAsync = async (fastify) => {
 	fastify.get('/m1/batches/current', async (request, reply) => {
 		const { data } = await fastify.db
 			.from('batches')
-			.select('id, batch_month, cutoff_at, status')
+			.select('id, batch_month, cutoff_at, status, created_at')
 			.eq('status', 'open')
 			.single();
 
