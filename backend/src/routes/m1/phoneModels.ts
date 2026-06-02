@@ -1,6 +1,18 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
+const SALARY_BANDS = ['>3600', '>4400', '>6596', '>8796', '>13595', '>17196'] as const;
+const BAND_VALUES = [3600, 4400, 6596, 8796, 13595, 17196] as const;
+
+// 25% rule: employee salary band floor must be >= upfront_amount * 4
+function calcMinBand(upfrontAmount: number): typeof SALARY_BANDS[number] {
+  const required = upfrontAmount * 4;
+  for (let i = 0; i < BAND_VALUES.length; i++) {
+    if (BAND_VALUES[i]! >= required) return SALARY_BANDS[i]!;
+  }
+  return SALARY_BANDS[SALARY_BANDS.length - 1]!;
+}
+
 const phoneModelSchema = z.object({
   model_name: z.string().min(1),
   model_code: z.string().optional(),
@@ -72,7 +84,7 @@ const phoneModelsRoute: FastifyPluginAsync = async (fastify) => {
 
     const { data, error } = await fastify.db
       .from('phone_models')
-      .insert(body.data)
+      .insert({ ...body.data, min_salary_band: calcMinBand(body.data.upfront_amount) })
       .select()
       .single();
 
@@ -89,9 +101,14 @@ const phoneModelsRoute: FastifyPluginAsync = async (fastify) => {
       return reply.code(422).send({ success: false, error: 'Invalid input', details: body.error.flatten() });
     }
 
+    const patchData: Record<string, unknown> = { ...body.data, updated_at: new Date().toISOString() };
+    if (body.data.upfront_amount !== undefined) {
+      patchData.min_salary_band = calcMinBand(body.data.upfront_amount);
+    }
+
     const { data, error } = await fastify.db
       .from('phone_models')
-      .update({ ...body.data, updated_at: new Date().toISOString() })
+      .update(patchData)
       .eq('id', id)
       .select()
       .single();

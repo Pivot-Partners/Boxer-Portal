@@ -16,6 +16,18 @@ interface PhoneModel {
 	is_active: boolean;
 }
 
+const SALARY_BANDS = ['>3600', '>4400', '>6596', '>8796', '>13595', '>17196'] as const;
+const BAND_VALUES = [3600, 4400, 6596, 8796, 13595, 17196] as const;
+
+function calcMinBand(amount: number): string {
+	if (!amount || amount <= 0) return '—';
+	const required = amount * 4;
+	for (let i = 0; i < BAND_VALUES.length; i++) {
+		if (BAND_VALUES[i]! >= required) return SALARY_BANDS[i]!;
+	}
+	return SALARY_BANDS[SALARY_BANDS.length - 1]!;
+}
+
 interface AddForm {
 	model_name: string;
 	model_code: string;
@@ -45,6 +57,7 @@ const fieldCls = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm foc
 export default function PhonesPage() {
 	const [models, setModels] = useState<PhoneModel[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [pageError, setPageError] = useState('');
 	const [toggling, setToggling] = useState<string | null>(null);
 	const [editId, setEditId] = useState<string | null>(null);
 	const [editData, setEditData] = useState<Partial<PhoneModel>>({});
@@ -62,7 +75,9 @@ export default function PhonesPage() {
 	}
 
 	useEffect(() => {
-		fetchModels().finally(() => setLoading(false));
+		fetchModels()
+			.catch((err) => setPageError(err instanceof Error ? err.message : 'Failed to load phone models'))
+			.finally(() => setLoading(false));
 	}, []);
 
 	async function toggleActive(model: PhoneModel) {
@@ -137,6 +152,16 @@ export default function PhonesPage() {
 		return (
 			<div className="flex items-center justify-center h-48">
 				<div className="text-gray-400 text-sm">Loading…</div>
+			</div>
+		);
+	}
+
+	if (pageError) {
+		return (
+			<div className="bg-red-50 border border-red-200 rounded-xl p-5 text-red-700 text-sm">
+				{pageError === 'Forbidden' || pageError.includes('403')
+					? 'This page is restricted to M1 admins and super admins.'
+					: pageError}
 			</div>
 		);
 	}
@@ -220,6 +245,13 @@ export default function PhonesPage() {
 							</div>
 						))}
 					</div>
+
+					{(addForm.upfront_amount || addForm.cash_price) && (
+						<div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-xs text-blue-800 flex gap-6">
+							<span><span className="font-semibold">Rental min salary:</span> {zar((parseFloat(addForm.upfront_amount) || 0) * 4)}/mo</span>
+							<span><span className="font-semibold">Cash min salary:</span> {zar((parseFloat(addForm.cash_price) || 0) * 4)}/mo</span>
+						</div>
+					)}
 
 					<div className="w-32">
 						<label className="block text-xs font-semibold text-gray-600 mb-1">Display order</label>
@@ -341,6 +373,8 @@ export default function PhonesPage() {
 										<span className="text-xs text-gray-500">7m: <span className="font-medium text-gray-700">{zar(model.rental_amount_7m)}/mo</span></span>
 										<span className="text-xs text-gray-500">13m: <span className="font-medium text-gray-700">{zar(model.rental_amount_13m)}/mo</span></span>
 										<span className="text-xs text-gray-400">Order: {model.display_order}</span>
+											<span className="text-xs text-gray-400">Rental min: <span className="font-medium text-gray-600">{zar(model.upfront_amount * 4)}/mo</span></span>
+										<span className="text-xs text-gray-400">Cash min: <span className="font-medium text-gray-600">{zar(model.cash_price * 4)}/mo</span></span>
 									</div>
 								</div>
 								<div className="flex items-center gap-3 shrink-0">

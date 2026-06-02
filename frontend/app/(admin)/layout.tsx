@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
@@ -66,6 +66,27 @@ const NAV = [
 			<svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
 				<path strokeLinecap="round" strokeLinejoin="round" d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
 				<path strokeLinecap="round" strokeLinejoin="round" d="M9 22V12h6v10" />
+			</svg>
+		),
+	},
+	{
+		label: 'Users',
+		href: '/admin/users',
+		icon: (
+			<svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+				<circle cx="9" cy="7" r="4" />
+				<path strokeLinecap="round" strokeLinejoin="round" d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" />
+				<path strokeLinecap="round" strokeLinejoin="round" d="M19 8v6M22 11h-6" />
+			</svg>
+		),
+	},
+	{
+		label: 'Config',
+		href: '/admin/config',
+		icon: (
+			<svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+				<circle cx="12" cy="12" r="3" />
+				<path strokeLinecap="round" strokeLinejoin="round" d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
 			</svg>
 		),
 	},
@@ -144,6 +165,38 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 	const router = useRouter();
 	const [sidebarOpen, setSidebarOpen] = useState(false);
 	const [loggingOut, setLoggingOut] = useState(false);
+	const [showIdleWarning, setShowIdleWarning] = useState(false);
+	const lastActivityRef = useRef(Date.now());
+
+	useEffect(() => {
+		function resetActivity() {
+			lastActivityRef.current = Date.now();
+			setShowIdleWarning(false);
+		}
+		window.addEventListener('mousemove', resetActivity, { passive: true });
+		window.addEventListener('keydown', resetActivity);
+		window.addEventListener('click', resetActivity);
+		const id = setInterval(() => {
+			if (Date.now() - lastActivityRef.current >= 12 * 60 * 1000) setShowIdleWarning(true);
+		}, 30_000);
+		return () => {
+			window.removeEventListener('mousemove', resetActivity);
+			window.removeEventListener('keydown', resetActivity);
+			window.removeEventListener('click', resetActivity);
+			clearInterval(id);
+		};
+	}, []);
+
+	async function stayLoggedIn() {
+		try {
+			await api('/auth/refresh', { method: 'POST' });
+		} catch {
+			router.replace('/login');
+			return;
+		}
+		lastActivityRef.current = Date.now();
+		setShowIdleWarning(false);
+	}
 
 	async function logout() {
 		setLoggingOut(true);
@@ -209,6 +262,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 					{children}
 				</main>
 			</div>
+
+			{showIdleWarning && (
+				<div className="fixed bottom-4 right-4 z-50 bg-amber-50 border border-amber-300 rounded-xl shadow-lg p-4 flex items-center gap-4 max-w-sm">
+					<p className="text-sm text-amber-800 flex-1">Your session is about to expire due to inactivity.</p>
+					<button
+						onClick={stayLoggedIn}
+						className="text-sm font-semibold text-amber-900 hover:underline shrink-0"
+					>
+						Stay logged in
+					</button>
+				</div>
+			)}
 		</div>
 	);
 }

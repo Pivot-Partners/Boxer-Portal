@@ -37,7 +37,12 @@ const adminAuthRoute: FastifyPluginAsync = async (fastify) => {
 
     if (!valid) {
       const attempts = (user.failed_login_attempts ?? 0) + 1;
-      const maxAttempts = 5;
+      const { data: cfgRow } = await fastify.db
+        .from('system_config')
+        .select('config_value')
+        .eq('config_key', 'admin_max_failed_logins')
+        .single();
+      const maxAttempts = parseInt(cfgRow?.config_value ?? '5', 10);
       const updates: Record<string, unknown> = { failed_login_attempts: attempts };
       if (attempts >= maxAttempts) {
         updates.locked_until = new Date(Date.now() + 15 * 60 * 1000).toISOString();

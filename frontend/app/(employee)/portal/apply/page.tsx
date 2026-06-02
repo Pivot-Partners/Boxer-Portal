@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 
@@ -93,6 +93,7 @@ export default function ApplyPage() {
 	const [submitting, setSubmitting] = useState(false);
 	const [submitError, setSubmitError] = useState('');
 	const [successRef, setSuccessRef] = useState('');
+	const submitGuard = useRef(false);
 
 	const [form, setForm] = useState<FormState>({
 		contactNumber: '',
@@ -156,11 +157,13 @@ export default function ApplyPage() {
 	const selectedPhone = eligiblePhones.find((p) => p.id === form.phoneModelId);
 
 	async function handleSubmit() {
+		if (submitGuard.current) return;
 		if (!form.storeId || !form.phoneModelId || form.rentalTerm === null || !form.termsAccepted) return;
 		if (!form.employeeNumber || !form.idNumber) {
 			setSubmitError('Please enter your employee number and ID number in Step 1.');
 			return;
 		}
+		submitGuard.current = true;
 		setSubmitting(true);
 		setSubmitError('');
 		try {
@@ -181,6 +184,7 @@ export default function ApplyPage() {
 			});
 			setSuccessRef(res.data?.reference_number ?? '');
 		} catch (err) {
+			submitGuard.current = false;
 			setSubmitError(err instanceof Error ? err.message : 'Submission failed');
 		} finally {
 			setSubmitting(false);

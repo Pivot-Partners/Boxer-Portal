@@ -20,6 +20,15 @@ const STATUS_COLOUR: Record<string, string> = {
 	superseded: 'bg-gray-100 text-gray-500',
 };
 
+interface LookupResult {
+	display_name: string;
+	store_code: string | null;
+	place_of_work: string | null;
+	employment_type: string;
+	salary_band: string | null;
+	eligible_phones: { id: string; model_name: string }[];
+}
+
 export default function WhitelistPage() {
 	const [uploads, setUploads] = useState<Upload[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -27,6 +36,11 @@ export default function WhitelistPage() {
 	const [uploadError, setUploadError] = useState('');
 	const [uploadSuccess, setUploadSuccess] = useState('');
 	const fileRef = useRef<HTMLInputElement>(null);
+
+	const [lookupEmp, setLookupEmp] = useState('');
+	const [lookupLoading, setLookupLoading] = useState(false);
+	const [lookupResult, setLookupResult] = useState<LookupResult | null | undefined>(undefined);
+	const [lookupError, setLookupError] = useState('');
 
 	async function fetchUploads() {
 		try {
@@ -38,6 +52,25 @@ export default function WhitelistPage() {
 	useEffect(() => {
 		fetchUploads().finally(() => setLoading(false));
 	}, []);
+
+	async function lookupEmployee(e: React.FormEvent) {
+		e.preventDefault();
+		if (!lookupEmp.trim()) return;
+		setLookupLoading(true);
+		setLookupError('');
+		setLookupResult(undefined);
+		try {
+			const res = await api<{ data: LookupResult | null }>('/m1/whitelist/lookup', {
+				method: 'POST',
+				body: { employee_number: lookupEmp.trim() },
+			});
+			setLookupResult(res.data);
+		} catch (err) {
+			setLookupError(err instanceof Error ? err.message : 'Lookup failed');
+		} finally {
+			setLookupLoading(false);
+		}
+	}
 
 	async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
 		const files = Array.from(e.target.files ?? []);
@@ -53,13 +86,14 @@ export default function WhitelistPage() {
 		}
 
 		try {
-			const res = await apiUpload<{ data: { valid_count: number; error_count: number; record_count: number; files: number } }>(
+			const res = await apiUpload<{ data: { valid_count: number; error_count: number; record_count: number; files: number; duplicate_count: number } }>(
 				'/m1/whitelist/upload',
 				formData
 			);
 			const fileLabel = (res.data?.files ?? 1) > 1 ? `${res.data?.files} files` : '1 file';
+			const dupNote = res.data?.duplicate_count > 0 ? ` · ${res.data.duplicate_count} duplicate entries merged` : '';
 			setUploadSuccess(
-				`Upload complete (${fileLabel}) - ${res.data?.valid_count?.toLocaleString()} valid records (${res.data?.error_count ?? 0} errors).`
+				`Upload complete (${fileLabel}) - ${res.data?.valid_count?.toLocaleString()} valid records (${res.data?.error_count ?? 0} errors)${dupNote}.`
 			);
 			await fetchUploads();
 		} catch (err) {
@@ -119,6 +153,68 @@ export default function WhitelistPage() {
 					<p>Upload both files together: flexi workers (~4,000 records) and permanent workers (~14,400 records).</p>
 					<p className="mt-1">Expected columns: EmployeeNo, Identity Number, First names, Last name, Store Number (or Store Num), Category, Pers. subarea text, salary band flags (&gt;3600 … &gt;17196)</p>
 				</div>
+			</div>
+
+			{/* Employee lookup */}
+			<div className="bg-white border border-gray-200 rounded-xl p-6">
+				<h2 className="font-semibold mb-1">Employee lookup</h2>
+				<p className="text-sm text-gray-500 mb-4">Check if an employee is on the current whitelist and what they are eligible for.</p>
+				<form onSubmit={lookupEmployee} className="flex gap-3">
+					<input
+						type="text"
+						value={lookupEmp}
+						onChange={(e) => setLookupEmp(e.target.value)}
+						placeholder="Employee number"
+						className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+					/>
+					<button
+						type="submit"
+						disabled={lookupLoading || !lookupEmp.trim()}
+						className="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
+					>
+						{lookupLoading ? 'Looking up…' : 'Look up'}
+					</button>
+				</form>
+
+				{lookupError && (
+					<div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{lookupError}</div>
+				)}
+
+				{lookupResult === null && (
+					<div className="mt-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
+						<p className="text-sm font-semibold text-amber-900">Not on current whitelist</p>
+						<p className="text-xs text-amber-700 mt-0.5">This employee number does not match any record in the active whitelist upload.</p>
+					</div>
+				)}
+
+				{lookupResult && (
+					<div className="mt-3 p-4 rounded-xl bg-green-50 border border-green-200 space-y-3">
+						<div className="flex items-center justify-between">
+							<p className="font-semibold text-green-900">{lookupResult.display_name}</p>
+							<span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-800">On whitelist</span>
+						</div>
+						<div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+							<div><span className="text-gray-500">Employment: </span><span className="font-medium capitalize">{lookupResult.employment_type}</span></div>
+							<div><span className="text-gray-500">Salary band: </span><span className="font-medium">{lookupResult.salary_band ?? '—'}</span></div>
+							<div><span className="text-gray-500">Store code: </span><span className="font-medium">{lookupResult.store_code ?? '—'}</span></div>
+							<div><span className="text-gray-500">Place of work: </span><span className="font-medium">{lookupResult.place_of_work ?? '—'}</span></div>
+						</div>
+						{lookupResult.eligible_phones.length > 0 ? (
+							<div>
+								<p className="text-xs text-gray-500 mb-1">Eligible phones:</p>
+								<div className="flex flex-wrap gap-1.5">
+									{lookupResult.eligible_phones.map((p) => (
+										<span key={p.id} className="text-xs px-2 py-1 bg-white border border-green-200 rounded-lg text-green-800 font-medium">
+											{p.model_name}
+										</span>
+									))}
+								</div>
+							</div>
+						) : (
+							<p className="text-xs text-amber-700">No eligible phone models for this salary band.</p>
+						)}
+					</div>
+				)}
 			</div>
 
 			{/* Upload history */}

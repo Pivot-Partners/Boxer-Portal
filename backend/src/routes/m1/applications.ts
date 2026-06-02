@@ -122,6 +122,14 @@ const applicationsRoute: FastifyPluginAsync = async (fastify) => {
 			return reply.code(400).send({ success: false, error: 'This phone is not available in the current batch' });
 		}
 
+		// 25% rule for cash purchases: salary band floor must cover the full cash price
+		if (body.data.rental_term === 0) {
+			const bandFloor = payload.salary_band ? (BAND_FLOOR[payload.salary_band] ?? 0) : 0;
+			if (bandFloor < catalogueEntry.cash_price * 4) {
+				return reply.code(400).send({ success: false, error: 'Your salary band does not qualify for cash purchase of this phone (25% rule)' });
+			}
+		}
+
 		// Pull first_name, last_name, email from whitelist record
 		const { data: whitelistRecord } = await fastify.db
 			.from('whitelist_records')

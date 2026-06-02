@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
 import { parse } from 'csv-parse/sync';
 import { hmacHash } from '../../services/auth/hashService';
 
@@ -83,9 +84,9 @@ const whitelistRoute: FastifyPluginAsync = async (fastify) => {
 			.select('id, model_name, min_salary_band')
 			.eq('is_active', true);
 
-		let validCount = 0;
 		let errorCount = 0;
-		const records = [];
+		let duplicateCount = 0;
+		const recordMap = new Map<string, object>();
 
 		for (const row of allRows) {
 			const empNo = row['EmployeeNo']?.trim();
@@ -102,6 +103,9 @@ const whitelistRoute: FastifyPluginAsync = async (fastify) => {
 				continue;
 			}
 
+			const empHash = hmacHash(empNo);
+			if (recordMap.has(empHash)) duplicateCount++;
+
 			const salaryBand = getHighestBand(row);
 			const eligibleModelIds = salaryBand
 				? (phoneModels ?? [])
@@ -109,9 +113,9 @@ const whitelistRoute: FastifyPluginAsync = async (fastify) => {
 					.map((m: any) => m.id)
 				: [];
 
-			records.push({
+			recordMap.set(empHash, {
 				upload_id: uploadId,
-				employee_number_hash: hmacHash(empNo),
+				employee_number_hash: empHash,
 				id_number_hash: hmacHash(idNo),
 				display_name: [firstName, lastName].filter(Boolean).join(' ') || empNo,
 				first_name: firstName || null,
@@ -123,8 +127,9 @@ const whitelistRoute: FastifyPluginAsync = async (fastify) => {
 				eligible_model_ids: eligibleModelIds,
 				is_current: true,
 			});
-			validCount++;
 		}
+
+		const records = Array.from(recordMap.values());
 
 		for (let i = 0; i < records.length; i += 100) {
 			await fastify.db.from('whitelist_records').insert(records.slice(i, i + 100));
@@ -132,7 +137,7 @@ const whitelistRoute: FastifyPluginAsync = async (fastify) => {
 
 		await fastify.db.from('whitelist_uploads').update({
 			status: 'active',
-			valid_count: validCount,
+			valid_count: records.length,
 			error_count: errorCount,
 		}).eq('id', uploadId);
 
@@ -142,10 +147,35 @@ const whitelistRoute: FastifyPluginAsync = async (fastify) => {
 				upload_id: uploadId,
 				files: fileList.length,
 				record_count: allRows.length,
-				valid_count: validCount,
+				valid_count: records.length,
 				error_count: errorCount,
+				duplicate_count: duplicateCount,
 			},
 		});
+	});
+
+	fastify.post('/m1/whitelist/lookup', {
+		preHandler: fastify.requireRole('m1_admin', 'super_admin'),
+	}, async (request, reply) => {
+		const body = z.object({ employee_number: z.string().min(1).max(20) }).safeParse(request.body);
+		if (!body.success) return reply.code(422).send({ success: false, error: 'Invalid input' });
+
+		const empHash = hmacHash(body.data.employee_number);
+		const { data } = await fastify.db
+			.from('whitelist_records')
+			.select('display_name, first_name, last_name, store_code, place_of_work, employment_type, salary_band, eligible_model_ids')
+			.eq('employee_number_hash', empHash)
+			.eq('is_current', true)
+			.maybeSingle();
+
+		if (!data) return reply.send({ success: true, data: null });
+
+		const { data: phones } = await fastify.db
+			.from('phone_models')
+			.select('id, model_name')
+			.in('id', (data as any).eligible_model_ids ?? []);
+
+		return reply.send({ success: true, data: { ...data, eligible_phones: phones ?? [] } });
 	});
 
 	fastify.get('/m1/whitelist/uploads', {

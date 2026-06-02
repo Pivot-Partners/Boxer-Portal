@@ -91,6 +91,27 @@ export default function PortalPage() {
 	const [editLoading, setEditLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [saveError, setSaveError] = useState('');
+	const [countdown, setCountdown] = useState('');
+	const [copied, setCopied] = useState(false);
+
+	useEffect(() => {
+		const cutoff = batch?.cutoff_at;
+		if (!cutoff) return;
+		function tick() {
+			const diff = new Date(cutoff!).getTime() - Date.now();
+			if (diff <= 0) { setCountdown(''); return; }
+			const days = Math.floor(diff / 86400000);
+			const hours = Math.floor((diff % 86400000) / 3600000);
+			const mins = Math.floor((diff % 3600000) / 60000);
+			if (days > 0) setCountdown(`${days}d ${hours}h remaining`);
+			else if (hours > 0) setCountdown(`${hours}h ${mins}m remaining`);
+			else if (mins > 0) setCountdown(`${mins}m remaining`);
+			else setCountdown('closing soon');
+		}
+		tick();
+		const id = setInterval(tick, 30000);
+		return () => clearInterval(id);
+	}, [batch?.cutoff_at]);
 
 	useEffect(() => {
 		Promise.all([
@@ -99,6 +120,14 @@ export default function PortalPage() {
 			api<{ data: Me }>('/auth/me').then((r) => setMe(r.data)).catch(() => {}),
 		]).finally(() => setLoading(false));
 	}, []);
+
+	function copyRef() {
+		if (!application?.reference_number) return;
+		navigator.clipboard?.writeText(application.reference_number).then(() => {
+			setCopied(true);
+			setTimeout(() => setCopied(false), 2000);
+		}).catch(() => {});
+	}
 
 	async function cancelApplication() {
 		setCancelling(true);
@@ -164,8 +193,13 @@ export default function PortalPage() {
 
 	if (loading) {
 		return (
-			<div className="flex items-center justify-center h-48">
-				<div className="text-gray-400 text-sm">Loading…</div>
+			<div className="space-y-6 animate-pulse">
+				<div className="space-y-2">
+					<div className="h-7 bg-gray-200 rounded-lg w-40" />
+					<div className="h-4 bg-gray-100 rounded w-32" />
+				</div>
+				<div className="h-16 bg-gray-100 rounded-xl" />
+				<div className="h-36 bg-gray-100 rounded-xl" />
 			</div>
 		);
 	}
@@ -184,7 +218,9 @@ export default function PortalPage() {
 				{isOpen ? (
 					<>
 						<p className="font-semibold text-green-800">Applications are open</p>
-						<p className="text-sm text-green-700 mt-0.5">Deadline: {cutoffDate}</p>
+						<p className="text-sm text-green-700 mt-0.5">
+							Deadline: {cutoffDate}{countdown ? ` · ${countdown}` : ''}
+						</p>
 					</>
 				) : (
 					<p className="text-gray-600 text-sm">
@@ -220,8 +256,23 @@ export default function PortalPage() {
 						</div>
 
 						<div className="border-t border-gray-100 pt-3 space-y-1">
-							<p className="text-xs text-gray-400">
+							<p className="text-xs text-gray-400 flex items-center gap-1.5 flex-wrap">
 								Reference: <span className="font-mono">{application.reference_number}</span>
+								<button
+									type="button"
+									onClick={copyRef}
+									title="Copy reference number"
+									className="text-gray-400 hover:text-gray-600 transition-colors"
+								>
+									{copied ? (
+										<span className="text-green-600 font-medium">Copied!</span>
+									) : (
+										<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+											<rect x="9" y="9" width="13" height="13" rx="2" />
+											<path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+										</svg>
+									)}
+								</button>
 								{' · '}
 								Submitted {new Date(application.submitted_at).toLocaleDateString('en-ZA')}
 							</p>
