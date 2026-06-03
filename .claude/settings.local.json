@@ -7,7 +7,9 @@
       "Bash(grep -E \"\\\\.ts$\")",
       "Bash(npx tsc *)",
       "Bash(curl *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(npm install *)",
+      "Bash(npm list *)"
     ]
   }
 }

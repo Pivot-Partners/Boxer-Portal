@@ -2,6 +2,16 @@ import type { FastifyPluginAsync } from 'fastify';
 import ExcelJS from 'exceljs';
 import { decrypt } from '../../services/auth/encryptionService';
 
+// xlsx-populate has no @types package — typed via cast
+interface XlsxWorkbook {
+	outputAsync(opts?: { password?: string }): Promise<Buffer>;
+}
+interface XlsxPopulateLib {
+	fromDataAsync(data: Buffer): Promise<XlsxWorkbook>;
+}
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const XlsxPopulate = require('xlsx-populate') as XlsxPopulateLib;
+
 // Category enum → HR display label
 const CATEGORY_LABELS: Record<string, string> = {
 	supermarket_mini: 'Boxer Supermarket or Boxer Mini',
@@ -205,8 +215,18 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
 		// Freeze header row
 		ws.views = [{ state: 'frozen', ySplit: 1 }];
 
-		// Generate buffer and stream as download
-		const buffer = await workbook.xlsx.writeBuffer();
+		// Fetch the export password from system_config (falls back to seed default)
+		const { data: configRow } = await fastify.db
+			.from('system_config')
+			.select('config_value')
+			.eq('config_key', 'hr_export_password')
+			.single();
+		const exportPassword = configRow?.config_value ?? 'Boxer2026!';
+
+		// Generate base buffer then encrypt with ECMA-376 open-password via xlsx-populate
+		const rawBuffer = await workbook.xlsx.writeBuffer();
+		const xlsxWb = await XlsxPopulate.fromDataAsync(Buffer.from(rawBuffer));
+		const protectedBuffer = await xlsxWb.outputAsync({ password: exportPassword });
 
 		const batchMonthLabel = batch.batch_month
 			? new Date(batch.batch_month).toISOString().slice(0, 7)
@@ -215,7 +235,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
 		reply
 			.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 			.header('Content-Disposition', `attachment; filename="HR_Successful_Applications_${batchMonthLabel}.xlsx"`)
-			.send(Buffer.from(buffer));
+			.send(protectedBuffer);
 	});
 };
 

@@ -84,11 +84,48 @@ const QUICK_ACTIONS = [
 	},
 ];
 
+// Batch lifecycle stages shown in the pipeline stepper
+const STAGES = [
+	{ key: 'open', label: 'Open' },
+	{ key: 'closed', label: 'Closed' },
+	{ key: 'awaiting_approval', label: 'Review' },
+	{ key: 'approved', label: 'Approved' },
+	{ key: 'completed', label: 'Complete' },
+] as const;
+
+const STATUS_TO_STEP: Record<string, number> = {
+	open: 0,
+	closed: 1,
+	processing: 1,
+	awaiting_approval: 2,
+	approved: 3,
+	orders_submitted: 3,
+	completed: 4,
+};
+
+function formatCountdown(s: number): string {
+	if (s <= 0) return 'Cutoff passed';
+	const days = Math.floor(s / 86400);
+	const hours = Math.floor((s % 86400) / 3600);
+	const mins = Math.floor((s % 3600) / 60);
+	const secs = s % 60;
+	if (days > 0) return `${days}d ${hours}h ${String(mins).padStart(2, '0')}m`;
+	if (hours > 0) return `${hours}h ${String(mins).padStart(2, '0')}m ${String(secs).padStart(2, '0')}s`;
+	return `${mins}m ${String(secs).padStart(2, '0')}s`;
+}
+
+function urgencyColour(s: number): string {
+	if (s > 3 * 86400) return 'text-emerald-600';
+	if (s > 86400) return 'text-amber-500';
+	return 'text-red-600';
+}
+
 export default function AdminDashboard() {
 	const [me, setMe] = useState<Me | null>(null);
 	const [batches, setBatches] = useState<Batch[]>([]);
 	const [uploads, setUploads] = useState<WhitelistUpload[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
 
 	useEffect(() => {
 		Promise.all([
@@ -101,6 +138,24 @@ export default function AdminDashboard() {
 	const currentBatch = batches.find((b) => b.status === 'open') ?? batches[0];
 	const latestUpload = uploads[0];
 	const firstName = (me?.full_name ?? me?.display_name)?.split(' ')[0];
+
+	// Live countdown — ticks every second while batch is open
+	useEffect(() => {
+		if (!currentBatch || currentBatch.status !== 'open') {
+			setSecondsLeft(null);
+			return;
+		}
+		const cutoff = new Date(currentBatch.cutoff_at).getTime();
+		const calc = () => setSecondsLeft(Math.max(0, Math.floor((cutoff - Date.now()) / 1000)));
+		calc();
+		const id = setInterval(calc, 1000);
+		return () => clearInterval(id);
+	}, [currentBatch?.id, currentBatch?.status, currentBatch?.cutoff_at]);
+
+	const stepIdx = currentBatch ? (STATUS_TO_STEP[currentBatch.status] ?? 0) : -1;
+	const totalEligible = latestUpload?.valid_count ?? 0;
+	const totalApps = currentBatch?.total_applications ?? 0;
+	const uptakePct = totalEligible > 0 ? Math.min(100, Math.round((totalApps / totalEligible) * 100)) : null;
 
 	if (loading) {
 		return (
@@ -119,7 +174,7 @@ export default function AdminDashboard() {
 						{firstName ? `Welcome back, ${firstName}` : 'Dashboard'}
 					</h1>
 					<p className="text-gray-500 text-sm mt-1 capitalize">
-						{me?.role?.replace(/_/g, ' ')} - Module 1: Staff Phone Rental
+						{me?.role?.replace(/_/g, ' ')} — Module 1: Staff Phone Rental
 					</p>
 				</div>
 				<div className="hidden sm:flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm shrink-0">
@@ -137,9 +192,7 @@ export default function AdminDashboard() {
 						</svg>
 						<div>
 							<p className="font-semibold text-amber-900 text-sm">Batch awaiting your approval</p>
-							<p className="text-amber-700 text-xs mt-0.5">
-								The current batch has closed and is ready for review.
-							</p>
+							<p className="text-amber-700 text-xs mt-0.5">The current batch has closed and is ready for review.</p>
 						</div>
 					</div>
 					<Link
@@ -151,17 +204,13 @@ export default function AdminDashboard() {
 				</div>
 			)}
 
-			{/* Stats */}
-			<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+			{/* Stat cards */}
+			<div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
 				<StatCard
 					label="Current Batch"
 					value={
 						currentBatch
-							? new Date(currentBatch.batch_month).toLocaleDateString('en-ZA', {
-								month: 'long',
-								year: 'numeric',
-								timeZone: 'UTC',
-							})
+							? new Date(currentBatch.batch_month).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 							: 'No active batch'
 					}
 					sub={currentBatch ? <StatusBadge status={currentBatch.status} /> : undefined}
@@ -169,35 +218,116 @@ export default function AdminDashboard() {
 				/>
 				<StatCard
 					label="Applications"
-					value={currentBatch?.total_applications?.toString() ?? '-'}
+					value={currentBatch ? totalApps.toLocaleString() : '—'}
+					sub={currentBatch ? `${currentBatch.valid_applications ?? 0} validated` : 'No active batch'}
+					href="/admin/applications"
+				/>
+				<StatCard
+					label="Employee Uptake"
+					value={uptakePct !== null ? `${uptakePct}%` : '—'}
 					sub={
-						currentBatch
-							? `${currentBatch.valid_applications ?? 0} validated`
-							: 'No active batch'
+						uptakePct !== null ? (
+							<div className="mt-1 space-y-1">
+								<div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+									<div
+										className="h-full bg-slate-700 rounded-full transition-all"
+										style={{ width: `${uptakePct}%` }}
+									/>
+								</div>
+								<p className="text-xs text-gray-400">{totalApps.toLocaleString()} of {totalEligible.toLocaleString()} eligible</p>
+							</div>
+						) : (
+							'Upload a whitelist to track uptake'
+						)
 					}
 					href="/admin/applications"
 				/>
 				<StatCard
 					label="HR Whitelist"
-					value={
-						latestUpload
-							? `${latestUpload.valid_count?.toLocaleString()} records`
-							: 'Not loaded'
-					}
+					value={latestUpload ? latestUpload.valid_count.toLocaleString() : 'Not loaded'}
 					sub={
 						latestUpload
-							? new Date(latestUpload.uploaded_at).toLocaleDateString('en-ZA')
+							? new Date(latestUpload.uploaded_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
 							: 'Upload a whitelist to enable eligibility checks'
 					}
 					href="/admin/whitelist"
 				/>
 			</div>
 
+			{/* Batch pipeline */}
+			{currentBatch && (
+				<div className="bg-white border border-gray-200 rounded-xl p-5">
+					<div className="flex items-start justify-between gap-4 mb-6">
+						<div>
+							<h2 className="font-semibold text-sm text-gray-900">Batch Pipeline</h2>
+							<p className="text-xs text-gray-400 mt-0.5">
+								{new Date(currentBatch.batch_month).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
+							</p>
+						</div>
+						{secondsLeft !== null && (
+							<div className="text-right shrink-0">
+								<p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Closes in</p>
+								<p className={`text-xl font-bold tabular-nums leading-tight mt-0.5 ${urgencyColour(secondsLeft)}`}>
+									{formatCountdown(secondsLeft)}
+								</p>
+								<p className="text-[10px] text-gray-400 mt-0.5">
+									{new Date(currentBatch.cutoff_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+								</p>
+							</div>
+						)}
+					</div>
+
+					{/* Stepper */}
+					<div className="flex items-start">
+						{STAGES.map(({ label }, i) => {
+							const isComplete = i < stepIdx;
+							const isActive = i === stepIdx;
+							return (
+								<div key={label} className="flex items-start flex-1 last:flex-none">
+									<div className="flex flex-col items-center gap-2 shrink-0">
+										<div
+											className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+												isComplete
+													? 'bg-slate-700 text-white'
+													: isActive
+													? 'bg-slate-900 text-white ring-4 ring-slate-100'
+													: 'bg-gray-100 text-gray-400'
+											}`}
+										>
+											{isComplete ? (
+												<svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+													<path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+												</svg>
+											) : (
+												i + 1
+											)}
+										</div>
+										<p
+											className={`text-[10px] font-semibold text-center leading-tight ${
+												isActive ? 'text-slate-900' : isComplete ? 'text-gray-500' : 'text-gray-300'
+											}`}
+										>
+											{label}
+										</p>
+									</div>
+									{/* Connector */}
+									{i < STAGES.length - 1 && (
+										<div
+											className={`flex-1 h-0.5 mt-4 mx-1.5 transition-colors ${
+												i < stepIdx ? 'bg-slate-700' : 'bg-gray-200'
+											}`}
+										/>
+									)}
+								</div>
+							);
+						})}
+					</div>
+				</div>
+			)}
+
 			{/* Quick actions */}
 			<div>
-				<h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-					Quick Actions
-				</h2>
+				<h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Quick Actions</h2>
 				<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 					{QUICK_ACTIONS.map(({ href, title, desc, icon }) => (
 						<ActionCard key={href} href={href} title={title} desc={desc} icon={icon} />

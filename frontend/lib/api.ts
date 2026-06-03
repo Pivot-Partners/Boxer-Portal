@@ -4,17 +4,25 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
 	body?: unknown;
 }
 
+// Singleton: deduplicate concurrent refresh attempts so multiple 401s don't race
+let refreshing: Promise<boolean> | null = null;
+
 async function silentRefresh(): Promise<boolean> {
-	try {
-		const res = await fetch(`${BASE}/auth/refresh`, { method: 'POST', credentials: 'include' });
-		return res.ok;
-	} catch {
-		return false;
-	}
+	if (refreshing) return refreshing;
+	refreshing = fetch(`${BASE}/auth/refresh`, { method: 'POST', credentials: 'include' })
+		.then(res => res.ok)
+		.catch(() => false)
+		.finally(() => { refreshing = null; });
+	return refreshing;
 }
 
+// Guard: only redirect once per page lifetime to avoid multiple concurrent 401s
+// all firing window.location.href at the same time
+let redirecting = false;
+
 function redirectToLogin() {
-	if (typeof window !== 'undefined') {
+	if (typeof window !== 'undefined' && !redirecting) {
+		redirecting = true;
 		window.location.href = '/login';
 	}
 }

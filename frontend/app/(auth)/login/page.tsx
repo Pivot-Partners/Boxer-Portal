@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 
 type Tab = 'employee' | 'admin';
@@ -31,7 +30,6 @@ function SubmitBtn({ loading, label }: { loading: boolean; label: string }) {
 }
 
 export default function LoginPage() {
-	const router = useRouter();
 	const [tab, setTab] = useState<Tab>('employee');
 	const [error, setError] = useState('');
 	const [loading, setLoading] = useState(false);
@@ -60,7 +58,9 @@ export default function LoginPage() {
 			// in the submission body for encrypted storage. Cleared when tab closes.
 			sessionStorage.setItem('boxer_emp_no', empNo.trim());
 			sessionStorage.setItem('boxer_id_no', idNo.trim());
-			router.replace('/portal');
+			// Hard redirect to ensure a clean JS context — avoids stale router state
+			// from a previous expired session causing unresponsive navigation
+			window.location.href = '/portal';
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Login failed');
 		} finally {
@@ -77,7 +77,7 @@ export default function LoginPage() {
 				method: 'POST',
 				body: { email: email.trim(), password },
 			});
-			router.replace('/admin');
+			window.location.href = '/admin';
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Login failed');
 		} finally {

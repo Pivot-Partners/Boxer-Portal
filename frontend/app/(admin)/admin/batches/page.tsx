@@ -566,44 +566,36 @@ export default function BatchesPage() {
 							)}
 						</div>
 
-						{/* Application stats */}
+						{/* Application breakdown */}
 						{(stats || statsLoading) && (
-							<div className="bg-white border border-gray-200 rounded-xl p-5 space-y-5">
-								<div>
-									<h3 className="font-semibold">Application breakdown</h3>
-									{stats && <p className="text-xs text-gray-500 mt-0.5">{stats.total} active applications</p>}
+							<div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+								<div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+									<h3 className="font-semibold">Application Breakdown</h3>
+									{stats && <span className="text-xs font-medium text-gray-400">{stats.total} active</span>}
 								</div>
-								{statsLoading && <div className="h-32 bg-gray-100 rounded-xl animate-pulse" />}
-								{stats && stats.total > 0 && (
-									<>
-										<div>
-											<p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By phone model</p>
-											<div className="space-y-2">
-												{stats.by_phone.map(({ name, count }) => (
-													<BarRow key={name} label={name} count={count} max={stats.by_phone[0]!.count} />
-												))}
-											</div>
+
+								{statsLoading && (
+									<div className="p-5 space-y-3">
+										<div className="h-2.5 bg-gray-100 rounded-full animate-pulse" />
+										<div className="grid grid-cols-3 gap-3">
+											{[0, 1, 2].map((i) => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}
 										</div>
-										<div>
-											<p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By payment term</p>
-											<div className="space-y-2">
-												{stats.by_term.map(({ name, count }) => (
-													<BarRow key={name} label={name} count={count} max={stats.total} />
-												))}
-											</div>
-										</div>
-										<div>
-											<p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Top stores</p>
-											<div className="space-y-2">
-												{stats.top_stores.map(({ name, count }) => (
-													<BarRow key={name} label={name} count={count} max={stats.top_stores[0]!.count} />
-												))}
-											</div>
-										</div>
-									</>
+										<div className="h-32 bg-gray-100 rounded-xl animate-pulse" />
+									</div>
 								)}
+
 								{stats && stats.total === 0 && (
-									<p className="text-sm text-gray-500">No active applications yet.</p>
+									<p className="p-5 text-sm text-gray-500">No active applications yet.</p>
+								)}
+
+								{stats && stats.total > 0 && (
+									<div className="p-5 space-y-6">
+										<TermBreakdown terms={stats.by_term} total={stats.total} />
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-5 border-t border-gray-100">
+											<StatBars title="By Phone Model" rows={stats.by_phone} barColour="bg-indigo-500" total={stats.total} />
+											<StatBars title="Top Stores" rows={stats.top_stores} barColour="bg-emerald-500" total={stats.total} ranked />
+										</div>
+									</div>
 								)}
 							</div>
 						)}
@@ -658,15 +650,89 @@ export default function BatchesPage() {
 	);
 }
 
-function BarRow({ label, count, max }: { label: string; count: number; max: number }) {
-	const pct = max > 0 ? Math.round((count / max) * 100) : 0;
+const TERM_STYLE: Record<string, { bar: string; bg: string; border: string; text: string; dot: string }> = {
+	Cash: { bar: 'bg-slate-700', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700', dot: 'bg-slate-600' },
+	'7-month': { bar: 'bg-blue-500', bg: 'bg-blue-50', border: 'border-blue-100', text: 'text-blue-700', dot: 'bg-blue-500' },
+	'13-month': { bar: 'bg-violet-500', bg: 'bg-violet-50', border: 'border-violet-100', text: 'text-violet-700', dot: 'bg-violet-500' },
+};
+
+const TERM_ORDER = ['Cash', '7-month', '13-month'];
+
+function TermBreakdown({ terms, total }: { terms: { name: string; count: number }[]; total: number }) {
+	const ordered = TERM_ORDER
+		.map((name) => terms.find((t) => t.name === name) ?? { name, count: 0 })
+		.filter((t) => t.count > 0);
+
 	return (
-		<div className="flex items-center gap-3">
-			<span className="text-sm text-gray-600 w-44 truncate shrink-0" title={label}>{label}</span>
-			<div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
-				<div className="bg-slate-600 h-4 rounded-full transition-all" style={{ width: `${pct}%` }} />
+		<div>
+			<p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Payment Term Split</p>
+			<div className="flex h-2.5 rounded-full overflow-hidden mb-4">
+				{ordered.map(({ name, count }) => {
+					const style = TERM_STYLE[name] ?? TERM_STYLE['Cash']!;
+					return (
+						<div
+							key={name}
+							className={`${style.bar} transition-all`}
+							style={{ width: `${(count / total) * 100}%` }}
+						/>
+					);
+				})}
 			</div>
-			<span className="text-sm font-medium text-gray-700 w-8 text-right shrink-0">{count}</span>
+			<div className="grid grid-cols-3 gap-3">
+				{ordered.map(({ name, count }) => {
+					const style = TERM_STYLE[name] ?? TERM_STYLE['Cash']!;
+					const pct = Math.round((count / total) * 100);
+					return (
+						<div key={name} className={`${style.bg} border ${style.border} rounded-xl p-3.5`}>
+							<div className="flex items-center gap-1.5 mb-2">
+								<span className={`w-2 h-2 rounded-full ${style.dot} shrink-0`} />
+								<span className={`text-xs font-semibold ${style.text}`}>{name}</span>
+							</div>
+							<p className="text-2xl font-bold text-gray-900 leading-none">{count}</p>
+							<p className="text-[11px] text-gray-400 mt-1">{pct}% of total</p>
+						</div>
+					);
+				})}
+			</div>
+		</div>
+	);
+}
+
+function StatBars({ title, rows, barColour, total, ranked = false }: {
+	title: string;
+	rows: { name: string; count: number }[];
+	barColour: string;
+	total: number;
+	ranked?: boolean;
+}) {
+	const maxCount = rows[0]?.count ?? 1;
+	return (
+		<div>
+			<p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{title}</p>
+			<div className="space-y-3">
+				{rows.map(({ name, count }, i) => {
+					const barPct = maxCount > 0 ? (count / maxCount) * 100 : 0;
+					const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+					return (
+						<div key={name} className={ranked ? 'flex items-center gap-2.5' : undefined}>
+							{ranked && (
+								<span className="text-[10px] font-bold text-gray-300 w-4 text-right shrink-0 tabular-nums">{i + 1}</span>
+							)}
+							<div className="flex-1 min-w-0">
+								<div className="flex items-center justify-between gap-2 mb-1">
+									<span className="text-xs text-gray-700 truncate" title={name}>{name}</span>
+									<span className="text-xs font-semibold text-gray-700 shrink-0 tabular-nums">
+										{count}<span className="font-normal text-gray-400 ml-1">({pct}%)</span>
+									</span>
+								</div>
+								<div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+									<div className={`h-full ${barColour} rounded-full transition-all`} style={{ width: `${barPct}%` }} />
+								</div>
+							</div>
+						</div>
+					);
+				})}
+			</div>
 		</div>
 	);
 }
