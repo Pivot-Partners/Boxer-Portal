@@ -95,6 +95,8 @@ export default function BatchesPage() {
 	const [approveError, setApproveError] = useState('');
 	const [closing, setClosing] = useState(false);
 	const [closeError, setCloseError] = useState('');
+	const [completing, setCompleting] = useState(false);
+	const [completeError, setCompleteError] = useState('');
 	const [seeding, setSeeding] = useState(false);
 	const [seedError, setSeedError] = useState('');
 	const [seedSuccess, setSeedSuccess] = useState('');
@@ -215,6 +217,20 @@ export default function BatchesPage() {
 		}
 	}
 
+	async function completeBatch() {
+		if (!selectedBatch) return;
+		setCompleting(true);
+		setCompleteError('');
+		try {
+			await api(`/m1/batches/${selectedBatch.id}/complete`, { method: 'POST' });
+			await fetchBatches();
+		} catch (err) {
+			setCompleteError(err instanceof Error ? err.message : 'Failed to mark complete');
+		} finally {
+			setCompleting(false);
+		}
+	}
+
 	async function seedCatalogue() {
 		if (!selectedBatch) return;
 		setSeeding(true);
@@ -243,6 +259,38 @@ export default function BatchesPage() {
 		} finally {
 			setTogglingId(null);
 		}
+	}
+
+	function downloadBreakdown() {
+		if (!stats || !selectedBatch) return;
+		const monthLabel = new Date(selectedBatch.batch_month).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+		const pct = (n: number) => stats.total > 0 ? `${Math.round((n / stats.total) * 100)}%` : '0%';
+		const q = (s: string) => `"${s.replace(/"/g, '""')}"`;
+
+		const lines = [
+			`Application Breakdown — ${monthLabel}`,
+			`Total Active Applications,${stats.total}`,
+			'',
+			'PAYMENT TERM SPLIT',
+			'Term,Count,Percentage',
+			...stats.by_term.map((r) => `${q(r.name)},${r.count},${pct(r.count)}`),
+			'',
+			'PHONE MODEL BREAKDOWN',
+			'Phone Model,Count,Percentage',
+			...stats.by_phone.map((r) => `${q(r.name)},${r.count},${pct(r.count)}`),
+			'',
+			'TOP STORES',
+			'Rank,Store,Count,Percentage',
+			...stats.top_stores.map((r, i) => `${i + 1},${q(r.name)},${r.count},${pct(r.count)}`),
+		];
+
+		const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `breakdown-${selectedBatch.batch_month}.csv`;
+		a.click();
+		URL.revokeObjectURL(url);
 	}
 
 	async function openBatch(e: React.FormEvent) {
@@ -480,6 +528,20 @@ export default function BatchesPage() {
 								</p>
 							)}
 
+							{selectedBatch.status === 'approved' && (
+								<div className="mt-4 pt-4 border-t border-gray-100">
+									{completeError && <p className="text-sm text-red-600 mb-2">{completeError}</p>}
+									<button
+										onClick={completeBatch}
+										disabled={completing}
+										className="px-5 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg disabled:opacity-50 transition-colors"
+									>
+										{completing ? 'Marking complete…' : 'Mark batch as complete'}
+									</button>
+									<p className="text-xs text-gray-400 mt-1">Use this once the HR export has been sent to payroll.</p>
+								</div>
+							)}
+
 							{(selectedBatch.processing_log?.length ?? 0) > 0 && (
 								<div className="mt-4 pt-4 border-t border-gray-100">
 									<button
@@ -571,7 +633,20 @@ export default function BatchesPage() {
 							<div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
 								<div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
 									<h3 className="font-semibold">Application Breakdown</h3>
-									{stats && <span className="text-xs font-medium text-gray-400">{stats.total} active</span>}
+									<div className="flex items-center gap-3">
+										{stats && <span className="text-xs font-medium text-gray-400">{stats.total} active</span>}
+										{stats && stats.total > 0 && (
+											<button
+												onClick={downloadBreakdown}
+												className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-300 rounded-lg transition-colors"
+											>
+												<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+													<path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+												</svg>
+												Download CSV
+											</button>
+										)}
+									</div>
 								</div>
 
 								{statsLoading && (

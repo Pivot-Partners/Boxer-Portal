@@ -4,13 +4,18 @@ import { z } from 'zod';
 const SALARY_BANDS = ['>3600', '>4400', '>6596', '>8796', '>13595', '>17196'] as const;
 const BAND_VALUES = [3600, 4400, 6596, 8796, 13595, 17196] as const;
 
-// 25% rule: employee salary band floor must be >= upfront_amount * 4
-function calcMinBand(upfrontAmount: number): typeof SALARY_BANDS[number] {
-  const required = upfrontAmount * 4;
+function calcMinBand(upfrontAmount: number, multiplier: number): typeof SALARY_BANDS[number] {
+  const required = upfrontAmount * multiplier;
   for (let i = 0; i < BAND_VALUES.length; i++) {
     if (BAND_VALUES[i]! >= required) return SALARY_BANDS[i]!;
   }
   return SALARY_BANDS[SALARY_BANDS.length - 1]!;
+}
+
+async function getSalaryMultiplier(db: any): Promise<number> {
+  const { data } = await db.from('system_config').select('config_value').eq('config_key', 'm1_salary_threshold_pct').single();
+  const pct = parseFloat(data?.config_value ?? '25');
+  return 100 / (pct > 0 ? pct : 25);
 }
 
 const phoneModelSchema = z.object({
@@ -82,9 +87,24 @@ const phoneModelsRoute: FastifyPluginAsync = async (fastify) => {
       return reply.code(422).send({ success: false, error: 'Invalid input', details: body.error.flatten() });
     }
 
+    const displayOrder = body.data.display_order ?? 0;
+    const { data: toShift } = await fastify.db
+      .from('phone_models')
+      .select('id, display_order')
+      .gte('display_order', displayOrder);
+
+    if (toShift && toShift.length > 0) {
+      await Promise.all(
+        (toShift as { id: string; display_order: number }[]).map((m) =>
+          fastify.db.from('phone_models').update({ display_order: m.display_order + 1 }).eq('id', m.id)
+        )
+      );
+    }
+
+    const multiplier = await getSalaryMultiplier(fastify.db);
     const { data, error } = await fastify.db
       .from('phone_models')
-      .insert({ ...body.data, min_salary_band: calcMinBand(body.data.upfront_amount) })
+      .insert({ ...body.data, display_order: displayOrder, min_salary_band: calcMinBand(body.data.upfront_amount, multiplier) })
       .select()
       .single();
 
@@ -103,7 +123,8 @@ const phoneModelsRoute: FastifyPluginAsync = async (fastify) => {
 
     const patchData: Record<string, unknown> = { ...body.data, updated_at: new Date().toISOString() };
     if (body.data.upfront_amount !== undefined) {
-      patchData.min_salary_band = calcMinBand(body.data.upfront_amount);
+      const multiplier = await getSalaryMultiplier(fastify.db);
+      patchData.min_salary_band = calcMinBand(body.data.upfront_amount, multiplier);
     }
 
     const { data, error } = await fastify.db

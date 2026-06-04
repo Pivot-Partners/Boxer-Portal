@@ -316,6 +316,25 @@ const batchRoute: FastifyPluginAsync = async (fastify) => {
 
 		return reply.send({ success: true, message: 'Batch approved. Download the HR export from /m1/batches/:id/export' });
 	});
+
+	// Admin — mark an approved batch as complete (after HR file has been sent)
+	fastify.post('/m1/batches/:id/complete', {
+		preHandler: fastify.requireRole('m1_admin', 'super_admin'),
+	}, async (request, reply) => {
+		const { id } = request.params as { id: string };
+
+		const { data: batch, error } = await fastify.db
+			.from('batches')
+			.select('id, status')
+			.eq('id', id)
+			.single();
+
+		if (error || !batch) return reply.code(404).send({ success: false, error: 'Batch not found' });
+		if (batch.status !== 'approved') return reply.code(400).send({ success: false, error: `Batch is ${batch.status}, not approved` });
+
+		await fastify.db.from('batches').update({ status: 'completed' }).eq('id', id);
+		return reply.send({ success: true });
+	});
 };
 
 export default batchRoute;

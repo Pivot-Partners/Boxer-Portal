@@ -21,6 +21,7 @@ import batchRoute from './routes/m1/batches';
 import exportRoute from './routes/m1/export';
 import configRoute from './routes/admin/config';
 import adminUsersRoute from './routes/admin/users';
+import m1ConfigRoute from './routes/m1/m1Config';
 
 const fastify = Fastify({
   logger: {
@@ -61,6 +62,7 @@ async function start() {
     await v1.register(exportRoute);
     await v1.register(configRoute);
     await v1.register(adminUsersRoute);
+    await v1.register(m1ConfigRoute);
   }, { prefix: '/v1' });
 
   fastify.get('/health', async () => ({ status: 'ok', ts: new Date().toISOString() }));

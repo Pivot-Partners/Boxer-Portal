@@ -87,7 +87,6 @@ const QUICK_ACTIONS = [
 // Batch lifecycle stages shown in the pipeline stepper
 const STAGES = [
 	{ key: 'open', label: 'Open' },
-	{ key: 'closed', label: 'Closed' },
 	{ key: 'awaiting_approval', label: 'Review' },
 	{ key: 'approved', label: 'Approved' },
 	{ key: 'completed', label: 'Complete' },
@@ -97,10 +96,11 @@ const STATUS_TO_STEP: Record<string, number> = {
 	open: 0,
 	closed: 1,
 	processing: 1,
-	awaiting_approval: 2,
-	approved: 3,
-	orders_submitted: 3,
-	completed: 4,
+	awaiting_approval: 1,
+	approved: 2,
+	orders_submitted: 2,
+	converted_to_order: 2,
+	completed: 3,
 };
 
 function formatCountdown(s: number): string {

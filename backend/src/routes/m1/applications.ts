@@ -9,6 +9,12 @@ function safeDecrypt(value: string | null | undefined): string {
 	try { return decrypt(value); } catch { return ''; }
 }
 
+async function getSalaryMultiplier(db: any): Promise<number> {
+	const { data } = await db.from('system_config').select('config_value').eq('config_key', 'm1_salary_threshold_pct').single();
+	const pct = parseFloat(data?.config_value ?? '25');
+	return 100 / (pct > 0 ? pct : 25);
+}
+
 async function refreshBatchStats(fastify: FastifyInstance, batchId: string) {
 	const { data: apps, error } = await fastify.db
 		.from('applications')
@@ -122,10 +128,10 @@ const applicationsRoute: FastifyPluginAsync = async (fastify) => {
 			return reply.code(400).send({ success: false, error: 'This phone is not available in the current batch' });
 		}
 
-		// 25% rule for cash purchases: salary band floor must cover the full cash price
 		if (body.data.rental_term === 0) {
 			const bandFloor = payload.salary_band ? (BAND_FLOOR[payload.salary_band] ?? 0) : 0;
-			if (bandFloor < catalogueEntry.cash_price * 4) {
+			const multiplier = await getSalaryMultiplier(fastify.db);
+			if (bandFloor < catalogueEntry.cash_price * multiplier) {
 				return reply.code(400).send({ success: false, error: 'Your salary band does not qualify for cash purchase of this phone (25% rule)' });
 			}
 		}
@@ -507,11 +513,14 @@ const applicationsRoute: FastifyPluginAsync = async (fastify) => {
 								});
 							}
 						}
-						if (body.data.rental_term === 0 && salaryFloor < (pm as any).cash_price * 4) {
-							return reply.code(400).send({
-								success: false,
-								error: "Employee's salary does not qualify for the cash purchase option (25% rule)",
-							});
+						if (body.data.rental_term === 0) {
+							const multiplier = await getSalaryMultiplier(fastify.db);
+							if (salaryFloor < (pm as any).cash_price * multiplier) {
+								return reply.code(400).send({
+									success: false,
+									error: "Employee's salary does not qualify for the cash purchase option (25% rule)",
+								});
+							}
 						}
 					}
 				}

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { useSalaryThreshold } from '@/lib/useSalaryThreshold';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -83,6 +84,7 @@ function StepBar({ current, total }: { current: number; total: number }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ApplyPage() {
+	const { multiplier } = useSalaryThreshold();
 	const router = useRouter();
 	const [step, setStep] = useState(0);
 	const [me, setMe] = useState<Me | null>(null);
@@ -261,6 +263,7 @@ export default function ApplyPage() {
 					onChange={patch}
 					onNext={() => setStep(3)}
 					salaryBand={me?.salary_band}
+					multiplier={multiplier}
 				/>
 			)}
 			{step === 3 && (
@@ -495,12 +498,14 @@ function Step3({
 	onChange,
 	onNext,
 	salaryBand,
+	multiplier,
 }: {
 	phones: PhoneModel[];
 	form: FormState;
 	onChange: (u: Partial<FormState>) => void;
 	onNext: () => void;
 	salaryBand?: string;
+	multiplier: number;
 }) {
 	const bandFloor = salaryBand ? (BAND_FLOOR[salaryBand] ?? 0) : 0;
 
@@ -531,7 +536,7 @@ function Step3({
 
 			<div className="space-y-4">
 				{phones.map((phone) => {
-					const canCash = bandFloor >= phone.cash_price * 4;
+					const canCash = bandFloor >= phone.cash_price * multiplier;
 
 					const options: { label: string; sublabel: string; term: 0 | 7 | 13 }[] = [
 						...(canCash ? [{

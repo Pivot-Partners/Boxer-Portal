@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useSalaryThreshold } from '@/lib/useSalaryThreshold';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -135,6 +136,7 @@ const BAND_FLOOR: Record<string, number> = {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ApplicationsPage() {
+	const { multiplier } = useSalaryThreshold();
 	const [batches, setBatches] = useState<Batch[]>([]);
 	const [apps, setApps] = useState<AppListItem[]>([]);
 	const [batchFilter, setBatchFilter] = useState<string | null>(null);
@@ -426,6 +428,7 @@ export default function ApplicationsPage() {
 						detail={detail}
 						form={form}
 						catalogue={catalogue}
+						multiplier={multiplier}
 						loading={panelLoading}
 						saving={saving}
 						saveError={saveError}
@@ -446,6 +449,7 @@ function DetailPanel({
 	detail,
 	form,
 	catalogue,
+	multiplier,
 	loading,
 	saving,
 	saveError,
@@ -457,6 +461,7 @@ function DetailPanel({
 	detail: AppDetail | null;
 	form: EditForm | null;
 	catalogue: CatalogueEntry[];
+	multiplier: number;
 	loading: boolean;
 	saving: boolean;
 	saveError: string;
@@ -484,7 +489,7 @@ function DetailPanel({
 
 	const selectedCat = catalogue.find((c) => c.source_model_id === form.phone_model_id);
 	const salaryFloor = detail.salary_band ? (BAND_FLOOR[detail.salary_band] ?? 0) : 0;
-	const canCash = selectedCat ? salaryFloor >= selectedCat.cash_price * 4 : false;
+	const canCash = selectedCat ? salaryFloor >= selectedCat.cash_price * multiplier : false;
 
 	return (
 		<div className="bg-white border border-gray-200 rounded-xl overflow-hidden sticky top-4">
@@ -536,7 +541,7 @@ function DetailPanel({
 						<span className="font-semibold">Salary eligibility: </span>
 						{detail.eligible_model_ids.length === 0
 							? 'No phone models qualify for this salary band.'
-							: `${detail.eligible_model_ids.length} phone model(s) available. Cash purchase requires salary ≥ R ${((selectedCat?.cash_price ?? 0) * 4).toLocaleString('en-ZA')}.`
+							: `${detail.eligible_model_ids.length} phone model(s) available. Cash purchase requires salary ≥ R ${((selectedCat?.cash_price ?? 0) * multiplier).toLocaleString('en-ZA')}.`
 						}
 					</div>
 				)}
@@ -655,7 +660,7 @@ function DetailPanel({
 										type="button"
 										disabled={cashBlocked}
 										onClick={() => !cashBlocked && onChange({ rental_term: term })}
-										title={cashBlocked ? `Cash requires salary ≥ R ${((selectedCat?.cash_price ?? 0) * 4).toLocaleString('en-ZA')}` : undefined}
+										title={cashBlocked ? `Cash requires salary ≥ R ${((selectedCat?.cash_price ?? 0) * multiplier).toLocaleString('en-ZA')}` : undefined}
 										className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
 											cashBlocked
 												? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
@@ -678,7 +683,7 @@ function DetailPanel({
 						)}
 						{!canCash && !!detail.salary_band && selectedCat && (
 							<p className="text-xs text-amber-600 mt-1">
-								Cash purchase not available - requires monthly salary ≥ {zar(selectedCat.cash_price * 4)}.
+								Cash purchase not available - requires monthly salary ≥ {zar(selectedCat.cash_price * multiplier)}.
 							</p>
 						)}
 					</Field>

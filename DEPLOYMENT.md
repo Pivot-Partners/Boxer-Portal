@@ -77,6 +77,14 @@ Apply all migrations **in order**, one at a time. Each migration must succeed be
 4. Includes its own `GRANT ALL ON TABLE store_categories` — no separate permission step needed for this table
 5. Verify: click **Table Editor** → open `store_categories` — you should see 6 rows
 
+**Migration 007 — Cancelled-by-admin application status**
+1. Click **New query**, paste `scripts/migrations/007_cancelled_by_admin_status.sql`, click **Run**
+2. Adds `cancelled_by_admin` as a valid value in the `applications.status` CHECK constraint (required for the admin post-deadline cancellation flow)
+
+**Migration 008 — Configurable salary threshold**
+1. Click **New query**, paste `scripts/migrations/008_salary_threshold_config.sql`, click **Run**
+2. Inserts `m1_salary_threshold_pct = 25` into `system_config` — the 25% upfront payment rule is now adjustable by a super admin via the Config page without a code deploy
+
 > **If you see a `permission denied` error** from the API after applying migrations, ensure all migrations were run in order (001–006). Migration 001's `GRANT ALL ON ALL TABLES` only covers tables that existed at that moment — each later migration that adds a new table includes its own `GRANT`. If the error persists for a specific table, paste and run the `GRANT` lines from the bottom of that table's migration file.
 
 > **If a migration fails partway through**, click **Table Editor**, check what was and wasn't created, fix the cause (usually a typo or partial paste), and re-run only that migration.
@@ -109,18 +117,21 @@ Apply all migrations **in order**, one at a time. Each migration must succeed be
 
 ### 2.1 Generate JWT secrets and encryption key
 
-You need three random secrets. Open a terminal in the `backend/` folder and run this command three times, saving each output:
+You need four random secrets. Open a terminal in the `backend/` folder and run this command four times, saving each output:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Run it once → copy the output → save as JWT_SECRET  
-Run it again → copy the output → save as JWT_REFRESH_SECRET  
-Run it a third time → copy the output → save as ENCRYPTION_KEY  
-All three must be different from each other.
+Run it once → copy the output → save as **JWT_SECRET**  
+Run it again → save as **JWT_REFRESH_SECRET**  
+Run it a third time → save as **ENCRYPTION_KEY**  
+Run it a fourth time → save as **HMAC_SECRET**  
+All four must be different from each other.
 
-> **ENCRYPTION_KEY** must be exactly 64 hex characters (32 bytes). The command above always produces this. It is used for AES-256-GCM encryption of employee numbers and ID numbers stored in the applications table — required for the HR Excel export to work. Without it the backend will refuse to start.
+> **ENCRYPTION_KEY** must be exactly 64 hex characters (32 bytes). It is used for AES-256-GCM encryption of employee numbers and ID numbers in the applications table — required for the HR Excel export to work. Without it the backend will refuse to start.
+
+> **HMAC_SECRET** is equally critical. It is the key for HMAC-SHA256 deterministic hashing of employee numbers used for whitelist lookups. Without it every employee login attempt will fail with an immediate server error.
 
 ### 2.2 Create the backend .env file
 
@@ -136,6 +147,7 @@ JWT_SECRET=paste-first-generated-secret-here
 JWT_REFRESH_SECRET=paste-second-generated-secret-here
 BCRYPT_ROUNDS=12
 ENCRYPTION_KEY=paste-third-generated-secret-here
+HMAC_SECRET=paste-fourth-generated-secret-here
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 RESEND_API_KEY=re_leave_blank_for_now
@@ -162,7 +174,7 @@ SUPER_ADMIN_INITIAL_PASSWORD=ChangeMe#2026!
 Replace:
 - `SUPABASE_URL` → the Project URL from step 1.6
 - `SUPABASE_SERVICE_ROLE_KEY` → the service_role key from step 1.6
-- `JWT_SECRET`, `JWT_REFRESH_SECRET`, and `ENCRYPTION_KEY` → the three values you generated in step 2.1
+- `JWT_SECRET`, `JWT_REFRESH_SECRET`, `ENCRYPTION_KEY`, and `HMAC_SECRET` → the four values you generated in step 2.1
 - `SUPER_ADMIN_EMAIL` → the email address the admin will log in with
 - `SUPER_ADMIN_INITIAL_PASSWORD` → a temporary strong password (you will change this after first login)
 
@@ -483,6 +495,7 @@ JWT_SECRET=
 JWT_REFRESH_SECRET=
 BCRYPT_ROUNDS=12
 ENCRYPTION_KEY=
+HMAC_SECRET=
 RESEND_API_KEY=
 SMS_PROVIDER=panacea
 PANACEA_API_KEY=

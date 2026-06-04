@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useSalaryThreshold } from '@/lib/useSalaryThreshold';
 
 interface PhoneModel {
 	id: string;
@@ -16,17 +17,6 @@ interface PhoneModel {
 	is_active: boolean;
 }
 
-const SALARY_BANDS = ['>3600', '>4400', '>6596', '>8796', '>13595', '>17196'] as const;
-const BAND_VALUES = [3600, 4400, 6596, 8796, 13595, 17196] as const;
-
-function calcMinBand(amount: number): string {
-	if (!amount || amount <= 0) return '—';
-	const required = amount * 4;
-	for (let i = 0; i < BAND_VALUES.length; i++) {
-		if (BAND_VALUES[i]! >= required) return SALARY_BANDS[i]!;
-	}
-	return SALARY_BANDS[SALARY_BANDS.length - 1]!;
-}
 
 interface AddForm {
 	model_name: string;
@@ -55,6 +45,7 @@ function zar(n: number) {
 const fieldCls = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent';
 
 export default function PhonesPage() {
+	const { multiplier } = useSalaryThreshold();
 	const [models, setModels] = useState<PhoneModel[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [pageError, setPageError] = useState('');
@@ -174,7 +165,14 @@ export default function PhonesPage() {
 					<p className="text-gray-500 text-sm mt-1">Manage the available phone catalogue and pricing</p>
 				</div>
 				<button
-					onClick={() => { setShowAdd((v) => !v); setAddError(''); }}
+					onClick={() => {
+					if (!showAdd) {
+						const maxOrder = models.length > 0 ? Math.max(...models.map((m) => m.display_order)) : 0;
+						setAddForm({ ...EMPTY_ADD, display_order: String(maxOrder + 1) });
+					}
+					setShowAdd((v) => !v);
+					setAddError('');
+				}}
 					className="shrink-0 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg transition-colors"
 				>
 					{showAdd ? 'Cancel' : '+ Add phone model'}
@@ -248,20 +246,21 @@ export default function PhonesPage() {
 
 					{(addForm.upfront_amount || addForm.cash_price) && (
 						<div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-xs text-blue-800 flex gap-6">
-							<span><span className="font-semibold">Rental min salary:</span> {zar((parseFloat(addForm.upfront_amount) || 0) * 4)}/mo</span>
-							<span><span className="font-semibold">Cash min salary:</span> {zar((parseFloat(addForm.cash_price) || 0) * 4)}/mo</span>
+							<span><span className="font-semibold">Rental min salary:</span> {zar((parseFloat(addForm.upfront_amount) || 0) * multiplier)}/mo</span>
+							<span><span className="font-semibold">Cash min salary:</span> {zar((parseFloat(addForm.cash_price) || 0) * multiplier)}/mo</span>
 						</div>
 					)}
 
-					<div className="w-32">
+					<div className="w-40">
 						<label className="block text-xs font-semibold text-gray-600 mb-1">Display order</label>
 						<input
 							type="number"
-							min="0"
+							min="1"
 							value={addForm.display_order}
 							onChange={(e) => setAddForm((f) => ({ ...f, display_order: e.target.value }))}
 							className={fieldCls}
 						/>
+						<p className="text-[11px] text-gray-400 mt-1">1 = first in list. Existing phones shift down.</p>
 					</div>
 
 					{addError && (

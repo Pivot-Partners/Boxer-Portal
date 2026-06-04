@@ -9,7 +9,9 @@
       "Bash(curl *)",
       "Bash(npm run *)",
       "Bash(npm install *)",
-      "Bash(npm list *)"
+      "Bash(npm list *)",
+      "Bash(xargs ls *)",
+      "Bash(npm test *)"
     ]
   }
 }

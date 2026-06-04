@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useSalaryThreshold } from '@/lib/useSalaryThreshold';
 
 interface Batch {
 	id: string;
@@ -77,6 +78,7 @@ function rentalLabel(term: number, cat: Application['batch_phone_catalogue']) {
 }
 
 export default function PortalPage() {
+	const { multiplier } = useSalaryThreshold();
 	const [batch, setBatch] = useState<Batch | null>(null);
 	const [application, setApplication] = useState<Application | null | undefined>(undefined);
 	const [me, setMe] = useState<Me | null>(null);
@@ -319,7 +321,7 @@ export default function PortalPage() {
 
 							<div className="space-y-3">
 								{editPhones.map((phone) => {
-									const canCash = bandFloor >= phone.cash_price * 4;
+									const canCash = bandFloor >= phone.cash_price * multiplier;
 									const options: { label: string; sublabel: string; term: 0 | 7 | 13 }[] = [
 										...(canCash ? [{ label: 'Buy for cash', sublabel: `${zar(phone.cash_price)} deducted once from salary`, term: 0 as const }] : []),
 										{ label: '7-month rental', sublabel: `First deduction ${zar(phone.upfront_amount)}, then ${zar(phone.rental_amount_7m)}/month × 6`, term: 7 as const },
